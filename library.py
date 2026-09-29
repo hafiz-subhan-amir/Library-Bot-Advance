@@ -3034,10 +3034,92 @@ st.markdown(
         <span class="creator-label">Created by</span>
         <span class="creator-name">Hafiz Subhan Amir</span>
     </div>
-    """,
-    unsafe_allow_html=True,
-)
 
+    <style>
+    .creator-badge {
+        width: fit-content;
+        margin: 18px auto 8px auto;
+        padding: 9px 20px;
+        border-radius: 30px;
+
+        background: rgba(255, 255, 255, 0.9);
+        border: 1px solid #dbe3ef;
+
+        box-shadow:
+            0 4px 15px rgba(15, 23, 42, 0.08);
+
+        display: flex;
+        align-items: center;
+        gap: 7px;
+
+        animation: creatorFloat 3s ease-in-out infinite;
+        transition: all 0.3s ease;
+    }
+
+    .creator-badge:hover {
+        transform: translateY(-3px) scale(1.02);
+
+        box-shadow:
+            0 8px 25px rgba(15, 23, 42, 0.15);
+
+        border-color: #b8c7dc;
+    }
+
+    .creator-label {
+        color: #64748b;
+        font-weight: 500;
+        font-size: 0.82rem;
+    }
+
+    .creator-name {
+        font-weight: 800;
+        font-size: 0.86rem;
+
+        background: linear-gradient(
+            90deg,
+            #2563eb,
+            #7c3aed,
+            #db2777,
+            #2563eb
+        );
+
+        background-size: 300% auto;
+
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+
+        background-clip: text;
+
+        animation: colorFlow 4s linear infinite;
+    }
+
+    @keyframes colorFlow {
+        0% {
+            background-position: 0% center;
+        }
+
+        50% {
+            background-position: 100% center;
+        }
+
+        100% {
+            background-position: 0% center;
+        }
+    }
+
+    @keyframes creatorFloat {
+        0%, 100% {
+            transform: translateY(0);
+        }
+
+        50% {
+            transform: translateY(-2px);
+        }
+    }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
 
 
 # CURRENT ATTACHMENTS
