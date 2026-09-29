@@ -47,13 +47,11 @@ load_dotenv()
 
 def get_secret(name, default=None):
     """
-    Read configuration from Streamlit Secrets first.
-
     Streamlit Cloud:
-        Uses secrets configured in the Streamlit app.
+        Read from st.secrets.
 
     Local:
-        Falls back to .env / environment variables.
+        Fall back to .env / environment variables.
     """
 
     try:
@@ -342,6 +340,7 @@ def new_chat():
 
 
 # MAIN GROQ LLM
+# DO NOT CHANGE
 
 
 @st.cache_resource
@@ -412,16 +411,27 @@ def get_vision_client():
 
 
 def prepare_image_for_vision(image):
+    """
+    Convert any uploaded image into a JPEG Base64 data URL.
+
+    Important:
+    We intentionally use a Base64 data URL rather than
+    an external URL because Groq may fail to retrieve
+    external/private media with HTTP 403.
+    """
 
     if not isinstance(image, Image.Image):
 
         image = Image.open(image)
 
+    # Correct EXIF rotation.
     image = ImageOps.exif_transpose(image)
 
+    # Convert everything to RGB.
     image = image.convert("RGB")
 
-    max_dimension = 3000
+    # Keep image reasonably sized.
+    max_dimension = 2500
 
     if (
         image.width > max_dimension
@@ -436,7 +446,11 @@ def prepare_image_for_vision(image):
             Image.Resampling.LANCZOS,
         )
 
-    quality = 88
+    # Compress image to avoid unnecessarily
+    # large vision requests.
+    quality = 85
+
+    image_bytes = None
 
     while quality >= 55:
 
@@ -451,11 +465,19 @@ def prepare_image_for_vision(image):
 
         image_bytes = buffer.getvalue()
 
-        if len(image_bytes) < 15 * 1024 * 1024:
+        # Keep Base64 payload comfortably below
+        # very large request sizes.
+        if len(image_bytes) < 8 * 1024 * 1024:
 
             break
 
         quality -= 5
+
+    if not image_bytes:
+
+        raise ValueError(
+            "Could not prepare image for Vision API."
+        )
 
     encoded = base64.b64encode(
         image_bytes
@@ -471,6 +493,11 @@ def ask_groq_vision(
     image,
     user_request,
 ):
+    """
+    Analyze an uploaded image using Groq Vision.
+
+    The image is always transmitted as a Base64 data URL.
+    """
 
     if not GROQ_VISION_API_KEY:
 
@@ -479,8 +506,7 @@ def ask_groq_vision(
             (
                 "GROQ_VISION_API_KEY is missing.\n\n"
                 "Please configure your separate "
-                "Groq Vision API key in "
-                "Streamlit Secrets."
+                "Groq Vision API key in Streamlit Secrets."
             ),
         )
 
@@ -502,50 +528,52 @@ def ask_groq_vision(
 
     try:
 
+        # ----------------------------------------------------
+        # PREPARE IMAGE
+        # ----------------------------------------------------
+
         data_url = prepare_image_for_vision(
             image
         )
 
+        # ----------------------------------------------------
+        # SHORT VISION PROMPT
+        #
+        # Keep this intentionally concise.
+        # This helps avoid unnecessary output-token usage.
+        # ----------------------------------------------------
+
         prompt = f"""
-You are the dedicated visual understanding
-component of an AI Library Assistant.
+You are the visual understanding component of an AI Library Assistant.
 
-Carefully inspect the uploaded image.
+Inspect the uploaded image and answer the user's request using only
+information actually visible in the image.
 
-USER REQUEST:
-
+User request:
 {user_request}
 
-Answer using only information actually visible
-in the image.
-
-You may:
-
-- read text
-- perform OCR
-- describe the image
-- explain a screenshot
-- explain a chart or diagram
-- analyze a photograph
-- identify visible objects
-- extract visible information
-- answer questions about the image
-
 Rules:
-
-1. Do not invent missing information.
-2. If text is blurry or unreadable, say so.
-3. If asked what the image says, prioritize OCR.
-4. Follow the user's current language automatically.
-5. English -> English.
-6. Urdu script -> Urdu script.
-7. Roman Urdu -> Roman Urdu.
-8. Mixed language -> naturally follow the user's style.
-9. The uploaded image's language does not determine
-   the answer language.
-10. Keep the answer concise and directly relevant
-    to the user's request.
+- Do not invent information.
+- If text is unreadable, say so.
+- Prioritize OCR when the user asks what the image says.
+- You may describe visible objects, screenshots, charts, diagrams,
+  photographs, or text.
+- Automatically answer in the user's current language/style.
+- English -> English.
+- Urdu script -> Urdu script.
+- Roman Urdu -> Roman Urdu.
+- Mixed language -> naturally follow the user's style.
+- The image language does not determine the response language.
+- Keep the answer concise.
 """
+
+        # ----------------------------------------------------
+        # GROQ VISION REQUEST
+        #
+        # IMPORTANT:
+        # image_url contains the Base64 data URL.
+        # No external URL is used.
+        # ----------------------------------------------------
 
         completion = client.chat.completions.create(
             model=GROQ_VISION_MODEL,
@@ -560,16 +588,20 @@ Rules:
                         {
                             "type": "image_url",
                             "image_url": {
-                                "url": data_url
+                                "url": data_url,
                             },
                         },
                     ],
                 }
             ],
-            temperature=0.2,
-            max_completion_tokens=512,
+            temperature=0.1,
+            max_completion_tokens=256,
             stream=False,
         )
+
+        # ----------------------------------------------------
+        # VALIDATE RESPONSE
+        # ----------------------------------------------------
 
         if (
             not completion
@@ -611,6 +643,7 @@ Rules:
                 f"{str(e)}"
             ),
         )
+
 
 
 # FILE TYPES
@@ -911,6 +944,10 @@ def process_uploaded_file(
         filename
     )
 
+    # --------------------------------------------------------
+    # IMAGE
+    # --------------------------------------------------------
+
     if extension in SUPPORTED_IMAGES:
 
         try:
@@ -919,14 +956,19 @@ def process_uploaded_file(
                 BytesIO(file.getvalue())
             )
 
-            success, result = (
-                ask_groq_vision(
-                    image,
-                    user_request
-                    or
-                    "Analyze this image carefully.",
-                )
+            success, result = ask_groq_vision(
+                image,
+                user_request
+                or
+                "Analyze this image carefully.",
             )
+
+            if success:
+
+                return (
+                    f"IMAGE: {filename}\n\n"
+                    f"{result}"
+                )
 
             return (
                 f"IMAGE: {filename}\n\n"
@@ -942,12 +984,20 @@ def process_uploaded_file(
                 f"{str(e)}"
             )
 
+    # --------------------------------------------------------
+    # PDF
+    # --------------------------------------------------------
+
     if extension == "pdf":
 
         return (
             f"FILE: {filename}\n\n"
             + extract_pdf(file)
         )
+
+    # --------------------------------------------------------
+    # DOCX
+    # --------------------------------------------------------
 
     if extension == "docx":
 
@@ -956,12 +1006,20 @@ def process_uploaded_file(
             + extract_docx(file)
         )
 
+    # --------------------------------------------------------
+    # PPTX
+    # --------------------------------------------------------
+
     if extension == "pptx":
 
         return (
             f"FILE: {filename}\n\n"
             + extract_pptx(file)
         )
+
+    # --------------------------------------------------------
+    # EXCEL
+    # --------------------------------------------------------
 
     if extension in {
         "xlsx",
@@ -973,12 +1031,20 @@ def process_uploaded_file(
             + extract_excel(file)
         )
 
+    # --------------------------------------------------------
+    # CSV
+    # --------------------------------------------------------
+
     if extension == "csv":
 
         return (
             f"FILE: {filename}\n\n"
             + extract_csv(file)
         )
+
+    # --------------------------------------------------------
+    # TXT / MD
+    # --------------------------------------------------------
 
     if extension in SUPPORTED_TEXT:
 
@@ -1011,6 +1077,10 @@ def process_uploaded_files(
 
         names.append(file.name)
 
+        # ----------------------------------------------------
+        # SAVE IMAGE BYTES FOR CHAT DISPLAY
+        # ----------------------------------------------------
+
         if is_image_file(file.name):
 
             try:
@@ -1032,6 +1102,10 @@ def process_uploaded_files(
 
                 pass
 
+        # ----------------------------------------------------
+        # EXTRACT / ANALYZE CONTENT
+        # ----------------------------------------------------
+
         contexts.append(
             process_uploaded_file(
                 file,
@@ -1039,7 +1113,9 @@ def process_uploaded_files(
             )
         )
 
-    combined = "\n\n".join(contexts)
+    combined = "\n\n".join(
+        contexts
+    )
 
     combined = combined[:120000]
 
@@ -1156,27 +1232,9 @@ def get_history():
 
 
 def looks_like_image_generation_request(text):
-    """
-    Detect natural-language image generation requests.
-
-    Examples recognized:
-
-    generate an image
-    generate me an image
-    generate an image of a library
-    create me a picture
-    make an image of...
-    make me a picture
-    draw me...
-    can you create an image...
-    I want an image of...
-    show me an image of...
-    generate artwork...
-    create a poster...
-    visualize...
-    """
 
     if not text:
+
         return False
 
     text_lower = re.sub(
@@ -1185,8 +1243,8 @@ def looks_like_image_generation_request(text):
         text.lower().strip(),
     )
 
-    # Direct image-generation actions.
     action_patterns = [
+
         r"\b(generate|create|make|draw|design|produce|render)\b"
         r".{0,40}"
         r"\b(image|picture|photo|artwork|illustration|visual|poster)\b",
@@ -1206,8 +1264,6 @@ def looks_like_image_generation_request(text):
 
             return True
 
-    # Direct requests such as:
-    # "show me an image of..."
     if re.search(
         r"\b(show|give|provide)\b"
         r".{0,30}"
@@ -1218,7 +1274,6 @@ def looks_like_image_generation_request(text):
 
         return True
 
-    # "I want an image of..."
     if re.search(
         r"\b(i want|i need|i would like|i'd like)\b"
         r".{0,30}"
@@ -1229,7 +1284,6 @@ def looks_like_image_generation_request(text):
 
         return True
 
-    # "visualize..."
     if re.search(
         r"\bvisuali[sz]e\b",
         text_lower,
@@ -1237,7 +1291,6 @@ def looks_like_image_generation_request(text):
 
         return True
 
-    # "draw me..."
     if re.search(
         r"\bdraw\s+(me\s+)?",
         text_lower,
@@ -1257,7 +1310,6 @@ def looks_like_image_generation_request(text):
 
         return True
 
-    # Poster-specific requests.
     if re.search(
         r"\b(create|make|design|generate)\b"
         r".{0,30}"
@@ -1267,7 +1319,6 @@ def looks_like_image_generation_request(text):
 
         return True
 
-    # Artwork-specific requests.
     if re.search(
         r"\b(create|make|generate|draw|design)\b"
         r".{0,30}"
@@ -1287,11 +1338,11 @@ def looks_like_image_generation_request(text):
 def detect_file_format(text):
 
     if not text:
+
         return None
 
     text_lower = text.lower()
 
-    # PowerPoint
     if any(
         phrase in text_lower
         for phrase in [
@@ -1305,7 +1356,6 @@ def detect_file_format(text):
 
         return "pptx"
 
-    # PDF
     if any(
         phrase in text_lower
         for phrase in [
@@ -1316,7 +1366,6 @@ def detect_file_format(text):
 
         return "pdf"
 
-    # Word
     if any(
         phrase in text_lower
         for phrase in [
@@ -1329,7 +1378,6 @@ def detect_file_format(text):
 
         return "docx"
 
-    # Excel
     if any(
         phrase in text_lower
         for phrase in [
@@ -1342,7 +1390,6 @@ def detect_file_format(text):
 
         return "xlsx"
 
-    # CSV
     if any(
         phrase in text_lower
         for phrase in [
@@ -1353,7 +1400,6 @@ def detect_file_format(text):
 
         return "csv"
 
-    # Markdown
     if any(
         phrase in text_lower
         for phrase in [
@@ -1365,7 +1411,6 @@ def detect_file_format(text):
 
         return "md"
 
-    # Text
     if any(
         phrase in text_lower
         for phrase in [
@@ -1377,7 +1422,6 @@ def detect_file_format(text):
 
         return "txt"
 
-    # Report -> PDF
     if any(
         phrase in text_lower
         for phrase in [
@@ -1397,6 +1441,7 @@ def detect_file_format(text):
 def looks_like_file_generation_request(text):
 
     if not text:
+
         return False
 
     text_lower = re.sub(
@@ -1408,10 +1453,6 @@ def looks_like_file_generation_request(text):
     requested_format = detect_file_format(
         text
     )
-
-    # --------------------------------------------------------
-    # Explicit file actions
-    # --------------------------------------------------------
 
     action_patterns = [
         r"\b(generate|create|prepare|make|export|download|save|convert|build)\b",
@@ -1425,10 +1466,6 @@ def looks_like_file_generation_request(text):
         )
         for pattern in action_patterns
     )
-
-    # --------------------------------------------------------
-    # File-related words
-    # --------------------------------------------------------
 
     file_words = [
         "file",
@@ -1456,32 +1493,9 @@ def looks_like_file_generation_request(text):
         for word in file_words
     )
 
-    # --------------------------------------------------------
-    # If there is a recognized format, require an action.
-    #
-    # This prevents:
-    #
-    # "What is a PDF?"
-    # "Explain Excel"
-    # "What is PowerPoint?"
-    #
-    # from generating files.
-    # --------------------------------------------------------
-
     if requested_format:
 
         return has_action
-
-    # --------------------------------------------------------
-    # Natural file requests without explicit extension.
-    #
-    # Examples:
-    #
-    # "make me a document"
-    # "create a downloadable file"
-    # "prepare a report"
-    # "make me a presentation"
-    # --------------------------------------------------------
 
     if has_action and has_file_word:
 
@@ -1498,20 +1512,7 @@ def detect_intent(text):
 
     text_lower = text.lower()
 
-    # --------------------------------------------------------
-    # IMAGE GENERATION FIRST
-    # --------------------------------------------------------
-    #
-    # This is intentionally checked before normal questions
-    # and before uploaded-image analysis.
-    #
-    # Example:
-    #
-    # "generate me an image of a person searching for books"
-    #
-    # -> IMAGE_GENERATION
-    #
-    # --------------------------------------------------------
+    # IMAGE GENERATION
 
     if looks_like_image_generation_request(
         text
@@ -1519,9 +1520,7 @@ def detect_intent(text):
 
         return "IMAGE_GENERATION"
 
-    # --------------------------------------------------------
     # FILE GENERATION
-    # --------------------------------------------------------
 
     if looks_like_file_generation_request(
         text
@@ -1529,9 +1528,7 @@ def detect_intent(text):
 
         return "FILE_GENERATION"
 
-    # --------------------------------------------------------
     # CATALOG
-    # --------------------------------------------------------
 
     if any(
         word in text_lower
@@ -1546,9 +1543,7 @@ def detect_intent(text):
 
         return "CATALOG_SEARCH"
 
-    # --------------------------------------------------------
     # SUMMARIZATION
-    # --------------------------------------------------------
 
     if any(
         word in text_lower
@@ -1561,9 +1556,7 @@ def detect_intent(text):
 
         return "SUMMARIZER"
 
-    # --------------------------------------------------------
     # CITATIONS
-    # --------------------------------------------------------
 
     if any(
         word in text_lower
@@ -1578,9 +1571,7 @@ def detect_intent(text):
 
         return "CITATION_ASSISTANT"
 
-    # --------------------------------------------------------
     # CATALOGUING
-    # --------------------------------------------------------
 
     if any(
         word in text_lower
@@ -1595,9 +1586,7 @@ def detect_intent(text):
 
         return "CATALOGUING_ASSISTANT"
 
-    # --------------------------------------------------------
     # INFORMATION LITERACY
-    # --------------------------------------------------------
 
     if any(
         word in text_lower
@@ -1611,9 +1600,7 @@ def detect_intent(text):
 
         return "INFORMATION_LITERACY"
 
-    # --------------------------------------------------------
     # RESEARCH
-    # --------------------------------------------------------
 
     if any(
         word in text_lower
@@ -1627,9 +1614,7 @@ def detect_intent(text):
 
         return "RESEARCH_ASSISTANT"
 
-    # --------------------------------------------------------
     # WRITING
-    # --------------------------------------------------------
 
     if any(
         word in text_lower
@@ -1643,10 +1628,6 @@ def detect_intent(text):
     ):
 
         return "WRITING_ASSISTANT"
-
-    # --------------------------------------------------------
-    # GENERAL
-    # --------------------------------------------------------
 
     return "GENERAL_LIBRARY"
 
@@ -1769,7 +1750,7 @@ of an AI image generation system.
 Convert the user's image request into a detailed
 image-generation prompt.
 
-Include only useful visual information such as:
+Include:
 
 - subject
 - environment
@@ -1785,8 +1766,6 @@ Include only useful visual information such as:
 Preserve the user's intended subject and meaning.
 
 Do not answer the user.
-
-Do not explain anything.
 
 Return ONLY the final image-generation prompt.
 """
@@ -1817,15 +1796,10 @@ def generate_image(
 
     try:
 
-        # ----------------------------------------------------
-        # CREATE INTERNAL IMAGE PROMPT
-        # ----------------------------------------------------
-
         prompt = create_image_prompt(
             user_request
         )
 
-        # Make sure the prompt is valid
         if not prompt or not prompt.strip():
 
             return (
@@ -1834,10 +1808,6 @@ def generate_image(
             )
 
         prompt = prompt.strip()
-
-        # ----------------------------------------------------
-        # CLOUDFLARE WORKERS AI URL
-        # ----------------------------------------------------
 
         url = (
             "https://api.cloudflare.com/client/v4/"
@@ -1850,11 +1820,6 @@ def generate_image(
                 f"Bearer {CLOUDFLARE_API_TOKEN}"
             )
         }
-
-        # ----------------------------------------------------
-        # IMPORTANT:
-        # FLUX 2 KLEIN 4B REQUIRES MULTIPART/FORM-DATA
-        # ----------------------------------------------------
 
         form_data = {
             "prompt": prompt,
@@ -1874,10 +1839,6 @@ def generate_image(
             },
             timeout=180,
         )
-
-        # ----------------------------------------------------
-        # HANDLE CLOUDFLARE ERRORS
-        # ----------------------------------------------------
 
         if not response.ok:
 
@@ -1905,10 +1866,6 @@ def generate_image(
                     ),
                 )
 
-        # ----------------------------------------------------
-        # PARSE RESPONSE
-        # ----------------------------------------------------
-
         result = response.json()
 
         if not result.get("success"):
@@ -1921,10 +1878,6 @@ def generate_image(
                     f"{json.dumps(result, indent=2)}"
                 ),
             )
-
-        # ----------------------------------------------------
-        # GET GENERATED IMAGE
-        # ----------------------------------------------------
 
         image_data = (
             result
@@ -1941,10 +1894,6 @@ def generate_image(
                     "but returned no image data."
                 ),
             )
-
-        # ----------------------------------------------------
-        # BASE64 -> PIL IMAGE
-        # ----------------------------------------------------
 
         image_bytes = base64.b64decode(
             image_data
@@ -1985,6 +1934,7 @@ def generate_image(
                 f"{str(e)}"
             ),
         )
+
 
 
 # FILE GENERATION HELPERS
@@ -3084,91 +3034,8 @@ st.markdown(
         <span class="creator-label">Created by</span>
         <span class="creator-name">Hafiz Subhan Amir</span>
     </div>
-
-    <style>
-    .creator-badge {
-        width: fit-content;
-        margin: 18px auto 8px auto;
-        padding: 9px 20px;
-        border-radius: 30px;
-
-        background: rgba(255, 255, 255, 0.9);
-        border: 1px solid #dbe3ef;
-
-        box-shadow:
-            0 4px 15px rgba(15, 23, 42, 0.08);
-
-        display: flex;
-        align-items: center;
-        gap: 7px;
-
-        animation: creatorFloat 3s ease-in-out infinite;
-        transition: all 0.3s ease;
-    }
-
-    .creator-badge:hover {
-        transform: translateY(-3px) scale(1.02);
-
-        box-shadow:
-            0 8px 25px rgba(15, 23, 42, 0.15);
-
-        border-color: #b8c7dc;
-    }
-
-    .creator-label {
-        color: #64748b;
-        font-weight: 500;
-        font-size: 0.82rem;
-    }
-
-    .creator-name {
-        font-weight: 800;
-        font-size: 0.86rem;
-
-        background: linear-gradient(
-            90deg,
-            #2563eb,
-            #7c3aed,
-            #db2777,
-            #2563eb
-        );
-
-        background-size: 300% auto;
-
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-
-        background-clip: text;
-
-        animation: colorFlow 4s linear infinite;
-    }
-
-    @keyframes colorFlow {
-        0% {
-            background-position: 0% center;
-        }
-
-        50% {
-            background-position: 100% center;
-        }
-
-        100% {
-            background-position: 0% center;
-        }
-    }
-
-    @keyframes creatorFloat {
-        0%, 100% {
-            transform: translateY(0);
-        }
-
-        50% {
-            transform: translateY(-2px);
-        }
-    }
-    </style>
     """,
-    unsafe_allow_html=True
+    unsafe_allow_html=True,
 )
 
 
@@ -3380,6 +3247,10 @@ if chat_input:
 
     uploaded_images = []
 
+    # --------------------------------------------------------
+    # PROCESS UPLOADS
+    # --------------------------------------------------------
+
     if uploaded_files:
 
         with st.spinner(
@@ -3411,6 +3282,10 @@ if chat_input:
             ]
         )
 
+    # --------------------------------------------------------
+    # DISPLAY USER MESSAGE
+    # --------------------------------------------------------
+
     display_user_message = (
         user_request
     )
@@ -3436,14 +3311,13 @@ if chat_input:
             user_request
         )
 
-    # ========================================================
+    # --------------------------------------------------------
     # DETECT INTENT
-    # ========================================================
+    # --------------------------------------------------------
 
     intent = detect_intent(
         user_request
     )
-
 
     # ========================================================
     # FILE GENERATION
