@@ -3531,7 +3531,7 @@ intent = detect_intent(user_request)
     # FILE GENERATION
     
 
-    if intent == "FILE_GENERATION":
+if intent == "FILE_GENERATION":
 
         with st.spinner(
             "Preparing your downloadable file..."
@@ -3590,7 +3590,7 @@ intent = detect_intent(user_request)
     # IMAGE GENERATION
     
 
-    elif intent == "IMAGE_GENERATION":
+elif intent == "IMAGE_GENERATION":
 
         with st.spinner(
             "Generating your image..."
@@ -3634,7 +3634,7 @@ intent = detect_intent(user_request)
     # IMAGE UPLOAD / VISION
     
 
-    elif uploaded_images:
+elif uploaded_images:
 
         vision_answers = []
 
@@ -3704,7 +3704,7 @@ intent = detect_intent(user_request)
     # CATALOG SEARCH
     
 
-    elif intent == "CATALOG_SEARCH":
+elif intent == "CATALOG_SEARCH":
 
         catalog_result = search_catalog(
             user_request
@@ -3758,7 +3758,7 @@ intent = detect_intent(user_request)
     # NORMAL QUESTION
     
 
-    else:
+else:
 
         with st.spinner(
             "Thinking..."
