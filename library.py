@@ -3510,8 +3510,8 @@ if chat_input:
         images=uploaded_images,
     )
 
-    if len(chat_messages()) == 1:
-    chat_title = generate_chat_title(
+        if len(chat_messages()) == 1:
+        chat_title = generate_chat_title(
         user_request
     )
     set_chat_title(chat_title)
