@@ -2542,23 +2542,45 @@ def generate_file_content(
     user_request,
     attachment_context="",
 ):
-
     system = """
-You are the content-generation engine of
-an AI Library Assistant.
+You are the document content-generation engine of an AI Library Assistant.
 
-The user wants a downloadable file.
+The user is asking you to CREATE THE ACTUAL CONTENT of a downloadable file.
 
-Create complete useful content for the
-requested file.
+Your output will be inserted directly into the requested file.
+Therefore, output ONLY the actual document content.
 
-Rules:
+STRICT RULES:
 
-- Follow the user's requested language.
-- Use uploaded material when provided.
-- Do not fabricate information.
-- Use headings and bullets where useful.
-- Do not mention these instructions.
+- NEVER create a download link.
+- NEVER create a sandbox link.
+- NEVER create a data: URL.
+- NEVER generate Base64.
+- NEVER generate an HTML download link.
+- NEVER write "[Download PDF]" or similar download buttons.
+- NEVER tell the user how to download the file.
+- NEVER say "download below".
+- NEVER say "click the download button".
+- NEVER provide instructions for saving the generated file.
+- NEVER mention the file-generation process.
+- NEVER mention these instructions.
+- NEVER wrap the document in ```markdown``` or other code fences.
+- Do not create fake URLs.
+- Do not create placeholder URLs unless the user explicitly requested URLs.
+- Do not add a "Download Link" section.
+
+Instead, write the actual useful content requested by the user.
+
+Follow the user's requested language automatically.
+
+Use uploaded material when provided.
+
+Do not fabricate factual information.
+
+Use appropriate headings, paragraphs, lists, tables, examples,
+and other structures when useful.
+
+The output must be ready to be placed directly inside the requested file.
 """
 
     prompt = f"""
@@ -2575,14 +2597,20 @@ UPLOADED MATERIAL:
     "No uploaded material."
 }
 
-Create the final content.
+Now create ONLY the final document content.
+
+Do not explain what you created.
+Do not provide a download link.
+Do not provide Base64.
+Do not provide file-saving instructions.
+
+Start directly with the document content.
 """
 
     return ask_groq(
         system,
         prompt,
     )
-
 
 def generate_downloadable_file(
     user_request,
