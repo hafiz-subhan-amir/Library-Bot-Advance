@@ -17,18 +17,10 @@ from groq import Groq
 from langchain_groq import ChatGroq
 from langchain_core.messages import SystemMessage, HumanMessage
 
-
-# FILE READING
-
-
 from pypdf import PdfReader
 from docx import Document
 from pptx import Presentation
-from openpyxl import load_workbook
-
-
-# FILE GENERATION
-
+from openpyxl import load_workbook, Workbook
 
 from reportlab.lib.pagesizes import A4
 from reportlab.platypus import (
@@ -44,7 +36,6 @@ from reportlab.lib.enums import TA_LEFT
 
 from docx.shared import Pt
 from pptx.util import Pt as PPTPt
-from openpyxl import Workbook
 
 
 
@@ -53,41 +44,78 @@ from openpyxl import Workbook
 
 load_dotenv()
 
-# ------------------------------------------------------------
+
+def get_secret(name, default=None):
+    """
+    Read configuration from Streamlit Secrets first.
+
+    Streamlit Cloud:
+        Uses secrets configured in the Streamlit app.
+
+    Local:
+        Falls back to .env / environment variables.
+    """
+
+    # --------------------------------------------------------
+    # STREAMLIT SECRETS
+    # --------------------------------------------------------
+
+    try:
+        value = st.secrets[name]
+
+        if value is not None and str(value).strip():
+            return str(value).strip()
+
+    except Exception:
+        pass
+
+    # --------------------------------------------------------
+    # ENVIRONMENT VARIABLES / .ENV
+    # --------------------------------------------------------
+
+    value = os.getenv(name)
+
+    if value is not None and str(value).strip():
+        return str(value).strip()
+
+    return default
+
+
+
 # MAIN GROQ
-# ------------------------------------------------------------
 
-GROQ_API_KEY = os.getenv(
-    "GROQ_API_KEY"
-)
 
-GROQ_MODEL = os.getenv(
+GROQ_API_KEY = get_secret("GROQ_API_KEY")
+
+GROQ_MODEL = get_secret(
     "GROQ_MODEL",
-    "openai/gpt-oss-120b"
+    "openai/gpt-oss-120b",
 )
 
-# ------------------------------------------------------------
-# SEPARATE GROQ VISION
-# ------------------------------------------------------------
 
-GROQ_VISION_API_KEY = os.getenv(
+
+# GROQ VISION
+
+
+GROQ_VISION_API_KEY = get_secret(
     "GROQ_VISION_API_KEY"
 )
 
-GROQ_VISION_MODEL = os.getenv(
+GROQ_VISION_MODEL = get_secret(
     "GROQ_VISION_MODEL",
-    "qwen/qwen3.8-27b"
+    "qwen/qwen3.8-27b",
 )
 
-# ------------------------------------------------------------
-# CLOUDFLARE IMAGE GENERATION
-# ------------------------------------------------------------
 
-CLOUDFLARE_ACCOUNT_ID = os.getenv(
+
+# CLOUDFLARE IMAGE GENERATION
+
+
+CLOUDFLARE_ACCOUNT_ID = get_secret(
     "CLOUDFLARE_ACCOUNT_ID"
 )
 
-CLOUDFLARE_API_TOKEN = os.getenv(
+CLOUDFLARE_API_TOKEN = get_secret(
     "CLOUDFLARE_API_TOKEN"
 )
 
@@ -125,27 +153,10 @@ st.markdown(
         margin-bottom: 0.2rem;
     }
 
-    div[data-testid="stChatInput"] textarea {
-    min-height: 80px !important;
-    font-size: 16px !important;
-    padding: 14px !important;
-}
-
-div[data-testid="stChatInput"] {
-    width: 100% !important;
-}
-
     .subtitle {
         color: #777;
         font-size: 1rem;
         margin-bottom: 1rem;
-    }
-
-    .status-box {
-        padding: 10px;
-        border-radius: 10px;
-        background: rgba(100,100,100,0.06);
-        margin-bottom: 8px;
     }
 
     .file-chip {
@@ -155,6 +166,84 @@ div[data-testid="stChatInput"] {
         border-radius: 12px;
         background: rgba(100,100,100,0.08);
         font-size: 0.82rem;
+    }
+
+    div[data-testid="stChatInput"] textarea {
+        min-height: 80px !important;
+        font-size: 16px !important;
+        padding: 14px !important;
+    }
+
+    div[data-testid="stChatInput"] {
+        width: 100% !important;
+    }
+
+    .creator-badge {
+        width: fit-content;
+        margin: 18px auto 8px auto;
+        padding: 9px 20px;
+        border-radius: 30px;
+        background: rgba(255, 255, 255, 0.9);
+        border: 1px solid #dbe3ef;
+        box-shadow: 0 4px 15px rgba(15, 23, 42, 0.08);
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        animation: creatorFloat 3s ease-in-out infinite;
+        transition: all 0.3s ease;
+    }
+
+    .creator-badge:hover {
+        transform: translateY(-3px) scale(1.02);
+        box-shadow: 0 8px 25px rgba(15, 23, 42, 0.15);
+        border-color: #b8c7dc;
+    }
+
+    .creator-label {
+        color: #64748b;
+        font-weight: 500;
+        font-size: 0.82rem;
+    }
+
+    .creator-name {
+        font-weight: 800;
+        font-size: 0.86rem;
+        background: linear-gradient(
+            90deg,
+            #2563eb,
+            #7c3aed,
+            #db2777,
+            #2563eb
+        );
+        background-size: 300% auto;
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        animation: colorFlow 4s linear infinite;
+    }
+
+    @keyframes colorFlow {
+        0% {
+            background-position: 0% center;
+        }
+
+        50% {
+            background-position: 100% center;
+        }
+
+        100% {
+            background-position: 0% center;
+        }
+    }
+
+    @keyframes creatorFloat {
+        0%, 100% {
+            transform: translateY(0);
+        }
+
+        50% {
+            transform: translateY(-2px);
+        }
     }
 
     </style>
@@ -183,9 +272,7 @@ def create_chat(title="New chat"):
 if "chats" not in st.session_state:
 
     st.session_state.chats = {
-        "chat_1": create_chat(
-            "Getting started"
-        )
+        "chat_1": create_chat("Getting started")
     }
 
 
@@ -221,10 +308,6 @@ def chat_messages():
     return current_chat()["messages"]
 
 
-
-# MESSAGE HANDLING
-
-
 def add_message(
     role,
     content,
@@ -255,23 +338,18 @@ def new_chat():
         f"chat_{st.session_state.chat_counter}"
     )
 
-    st.session_state.chats[chat_id] = (
-        create_chat(
-            f"New chat "
-            f"{st.session_state.chat_counter}"
-        )
+    st.session_state.chats[chat_id] = create_chat(
+        f"New chat {st.session_state.chat_counter}"
     )
 
-    st.session_state.current_chat_id = (
-        chat_id
-    )
+    st.session_state.current_chat_id = chat_id
 
     st.session_state.generated_image = None
     st.session_state.generated_file = None
 
 
 
-# MAIN GROQ MODEL
+# MAIN GROQ LLM
 
 
 @st.cache_resource
@@ -290,7 +368,7 @@ def get_llm():
 
 def ask_groq(
     system_prompt,
-    user_prompt
+    user_prompt,
 ):
 
     llm = get_llm()
@@ -299,7 +377,7 @@ def ask_groq(
 
         return (
             "GROQ_API_KEY is missing. "
-            "Please add it to your .env file."
+            "Please configure it in Streamlit Secrets."
         )
 
     try:
@@ -326,7 +404,7 @@ def ask_groq(
 
 
 
-# VISION CLIENT
+# GROQ VISION
 
 
 @st.cache_resource
@@ -341,46 +419,15 @@ def get_vision_client():
     )
 
 
+def prepare_image_for_vision(image):
 
-# IMAGE PREPARATION FOR VISION
+    if not isinstance(image, Image.Image):
 
+        image = Image.open(image)
 
-def prepare_image_for_vision(
-    image
-):
-
-    """
-    Convert uploaded image to RGB JPEG.
-
-    This prevents common problems caused by:
-    - PNG transparency
-    - GIF format
-    - CMYK images
-    - EXIF rotation
-    - very large images
-    - unusual image encodings
-    """
-
-    if not isinstance(
-        image,
-        Image.Image
-    ):
-
-        image = Image.open(
-            image
-        )
-
-    # Correct EXIF orientation
-
-    image = ImageOps.exif_transpose(
-        image
-    )
-
-    # Convert all image modes to RGB
+    image = ImageOps.exif_transpose(image)
 
     image = image.convert("RGB")
-
-    # Keep dimensions reasonable
 
     max_dimension = 3000
 
@@ -396,8 +443,6 @@ def prepare_image_for_vision(
             ),
             Image.Resampling.LANCZOS,
         )
-
-    # Compress progressively if needed
 
     quality = 88
 
@@ -424,30 +469,16 @@ def prepare_image_for_vision(
         image_bytes
     ).decode("utf-8")
 
-    data_url = (
+    return (
         "data:image/jpeg;base64,"
         + encoded
     )
 
-    return data_url
-
-
-
-# GROQ VISION
-
 
 def ask_groq_vision(
     image,
-    user_request
+    user_request,
 ):
-
-    """
-    Direct image understanding through
-    the separate GROQ_VISION_API_KEY.
-
-    Returns:
-        success, answer
-    """
 
     if not GROQ_VISION_API_KEY:
 
@@ -455,8 +486,9 @@ def ask_groq_vision(
             False,
             (
                 "GROQ_VISION_API_KEY is missing.\n\n"
-                "Please add your separate Groq Vision "
-                "API key to the .env file."
+                "Please configure your separate "
+                "Groq Vision API key in "
+                "Streamlit Secrets."
             ),
         )
 
@@ -464,7 +496,7 @@ def ask_groq_vision(
 
         return (
             False,
-            "GROQ_VISION_MODEL is missing."
+            "GROQ_VISION_MODEL is missing.",
         )
 
     client = get_vision_client()
@@ -473,24 +505,14 @@ def ask_groq_vision(
 
         return (
             False,
-            "Could not initialize the Groq Vision client."
+            "Could not initialize the Groq Vision client.",
         )
 
     try:
 
-        # ----------------------------------------------------
-        # Prepare image
-        # ----------------------------------------------------
-
-        data_url = (
-            prepare_image_for_vision(
-                image
-            )
+        data_url = prepare_image_for_vision(
+            image
         )
-
-        # ----------------------------------------------------
-        # Prompt
-        # ----------------------------------------------------
 
         prompt = f"""
 You are the dedicated visual understanding
@@ -499,55 +521,44 @@ component of an AI Library Assistant.
 Carefully inspect the uploaded image.
 
 USER REQUEST:
+
 {user_request}
 
-Your job is to answer the user's request using
-the actual visual information in the image.
+Answer using only information actually visible
+in the image.
 
-You may need to:
+You may:
 
 - read text
 - perform OCR
 - describe the image
 - explain a screenshot
-- explain a chart
-- explain a diagram
+- explain a chart or diagram
 - analyze a photograph
 - identify visible objects
 - extract visible information
 - answer questions about the image
-- explain what the image says
 
-IMPORTANT RULES:
+Rules:
 
-1. Only report information that is actually visible.
-2. Do not invent missing text.
-3. If text is blurry or unreadable, clearly say so.
-4. If the user asks "what does this image say?",
-   prioritize accurate OCR/transcription.
-5. If the user asks for an explanation,
-   explain the visible content.
-6. Follow the user's language automatically.
-7. English request -> English.
-8. Urdu script -> Urdu script.
-9. Roman Urdu -> Roman Urdu.
-10. Mixed language -> naturally follow the user's style.
-11. An uploaded document/image language does not
-    determine the response language.
+1. Do not invent missing information.
+2. If text is blurry or unreadable, say so.
+3. If asked what the image says, prioritize OCR.
+4. Follow the user's current language automatically.
+5. English -> English.
+6. Urdu script -> Urdu script.
+7. Roman Urdu -> Roman Urdu.
+8. Mixed language -> naturally follow the user's style.
+9. The uploaded image's language does not determine
+   the answer language.
 """
-
-        # ----------------------------------------------------
-        # Groq multimodal request
-        # ----------------------------------------------------
 
         completion = (
             client.chat.completions.create(
                 model=GROQ_VISION_MODEL,
-
                 messages=[
                     {
                         "role": "user",
-
                         "content": [
                             {
                                 "type": "text",
@@ -562,40 +573,24 @@ IMPORTANT RULES:
                         ],
                     }
                 ],
-
                 temperature=0.7,
-
                 max_completion_tokens=4096,
-
                 top_p=0.8,
-
                 stream=False,
             )
         )
 
-        # ----------------------------------------------------
-        # Validate response
-        # ----------------------------------------------------
-
-        if not completion:
-
-            return (
-                False,
-                "Groq Vision returned no response."
-            )
-
-        if not completion.choices:
+        if (
+            not completion
+            or not completion.choices
+        ):
 
             return (
                 False,
-                "Groq Vision returned no choices."
+                "Groq Vision returned no usable response.",
             )
 
-        message = (
-            completion
-            .choices[0]
-            .message
-        )
+        message = completion.choices[0].message
 
         answer = (
             message.content
@@ -607,31 +602,28 @@ IMPORTANT RULES:
 
             return (
                 False,
-                "Groq Vision returned an empty answer."
+                "Groq Vision returned an empty answer.",
             )
 
         return (
             True,
-            answer.strip()
+            answer.strip(),
         )
 
     except Exception as e:
 
-        error_type = type(e).__name__
-
-        error_message = str(e)
-
         return (
             False,
             (
-                f"Vision API error ({error_type}):\n\n"
-                f"{error_message}"
+                f"Vision API error "
+                f"({type(e).__name__}):\n\n"
+                f"{str(e)}"
             ),
         )
 
 
 
-# SUPPORTED FILE TYPES
+# FILE TYPES
 
 
 SUPPORTED_IMAGES = {
@@ -657,24 +649,19 @@ SUPPORTED_DOCUMENTS = {
 }
 
 
-def get_extension(
-    filename
-):
+def get_extension(filename):
 
     if "." not in filename:
 
         return ""
 
-    return (
-        filename
-        .lower()
-        .rsplit(".", 1)[-1]
-    )
+    return filename.lower().rsplit(
+        ".",
+        1,
+    )[-1]
 
 
-def is_image_file(
-    filename
-):
+def is_image_file(filename):
 
     return (
         get_extension(filename)
@@ -759,9 +746,7 @@ def search_catalog(query):
 def extract_pdf(file):
 
     reader = PdfReader(
-        BytesIO(
-            file.getvalue()
-        )
+        BytesIO(file.getvalue())
     )
 
     pages = []
@@ -784,9 +769,7 @@ def extract_pdf(file):
 def extract_docx(file):
 
     document = Document(
-        BytesIO(
-            file.getvalue()
-        )
+        BytesIO(file.getvalue())
     )
 
     parts = []
@@ -805,9 +788,7 @@ def extract_docx(file):
 def extract_pptx(file):
 
     presentation = Presentation(
-        BytesIO(
-            file.getvalue()
-        )
+        BytesIO(file.getvalue())
     )
 
     slides = []
@@ -823,18 +804,13 @@ def extract_pptx(file):
 
         for shape in slide.shapes:
 
-            if hasattr(
-                shape,
-                "text"
-            ):
+            if hasattr(shape, "text"):
 
                 text = shape.text.strip()
 
                 if text:
 
-                    slide_text.append(
-                        text
-                    )
+                    slide_text.append(text)
 
         slides.append(
             "\n".join(slide_text)
@@ -882,9 +858,7 @@ def extract_excel(file):
                     " | ".join(values)
                 )
 
-        output.extend(
-            rows[:1000]
-        )
+        output.extend(rows[:1000])
 
     return "\n".join(output)
 
@@ -894,9 +868,7 @@ def extract_csv(file):
     try:
 
         df = pd.read_csv(
-            BytesIO(
-                file.getvalue()
-            )
+            BytesIO(file.getvalue())
         )
 
         return df.to_string(
@@ -906,7 +878,8 @@ def extract_csv(file):
     except Exception as e:
 
         return (
-            f"Could not read CSV: {str(e)}"
+            "Could not read CSV: "
+            f"{str(e)}"
         )
 
 
@@ -930,9 +903,7 @@ def extract_text_file(file):
 
             continue
 
-    return (
-        "Could not decode text file."
-    )
+    return "Could not decode text file."
 
 
 
@@ -941,7 +912,7 @@ def extract_text_file(file):
 
 def process_uploaded_file(
     file,
-    user_request
+    user_request,
 ):
 
     filename = file.name
@@ -950,18 +921,12 @@ def process_uploaded_file(
         filename
     )
 
-    # --------------------------------------------------------
-    # IMAGE
-    # --------------------------------------------------------
-
     if extension in SUPPORTED_IMAGES:
 
         try:
 
             image = Image.open(
-                BytesIO(
-                    file.getvalue()
-                )
+                BytesIO(file.getvalue())
             )
 
             success, result = (
@@ -982,13 +947,10 @@ def process_uploaded_file(
 
             return (
                 f"IMAGE: {filename}\n\n"
-                f"Could not process image:\n\n"
-                f"{type(e).__name__}: {str(e)}"
+                "Could not process image:\n\n"
+                f"{type(e).__name__}: "
+                f"{str(e)}"
             )
-
-    # --------------------------------------------------------
-    # PDF
-    # --------------------------------------------------------
 
     if extension == "pdf":
 
@@ -997,10 +959,6 @@ def process_uploaded_file(
             + extract_pdf(file)
         )
 
-    # --------------------------------------------------------
-    # DOCX
-    # --------------------------------------------------------
-
     if extension == "docx":
 
         return (
@@ -1008,20 +966,12 @@ def process_uploaded_file(
             + extract_docx(file)
         )
 
-    # --------------------------------------------------------
-    # PPTX
-    # --------------------------------------------------------
-
     if extension == "pptx":
 
         return (
             f"FILE: {filename}\n\n"
             + extract_pptx(file)
         )
-
-    # --------------------------------------------------------
-    # EXCEL
-    # --------------------------------------------------------
 
     if extension in {
         "xlsx",
@@ -1033,20 +983,12 @@ def process_uploaded_file(
             + extract_excel(file)
         )
 
-    # --------------------------------------------------------
-    # CSV
-    # --------------------------------------------------------
-
     if extension == "csv":
 
         return (
             f"FILE: {filename}\n\n"
             + extract_csv(file)
         )
-
-    # --------------------------------------------------------
-    # TXT / MD
-    # --------------------------------------------------------
 
     if extension in SUPPORTED_TEXT:
 
@@ -1064,7 +1006,7 @@ def process_uploaded_file(
 
 def process_uploaded_files(
     files,
-    user_request
+    user_request,
 ):
 
     if not files:
@@ -1079,17 +1021,11 @@ def process_uploaded_files(
 
         names.append(file.name)
 
-        # ----------------------------------------------------
-        # SAVE ACTUAL IMAGE DATA FOR CHAT DISPLAY
-        # ----------------------------------------------------
-
         if is_image_file(file.name):
 
             try:
 
                 image_bytes = file.getvalue()
-
-                # Verify valid image
 
                 Image.open(
                     BytesIO(image_bytes)
@@ -1106,22 +1042,14 @@ def process_uploaded_files(
 
                 pass
 
-        # ----------------------------------------------------
-        # PROCESS FILE
-        # ----------------------------------------------------
-
-        result = process_uploaded_file(
-            file,
-            user_request,
+        contexts.append(
+            process_uploaded_file(
+                file,
+                user_request,
+            )
         )
 
-        contexts.append(result)
-
-    combined = "\n\n".join(
-        contexts
-    )
-
-    # Keep prompt size reasonable
+    combined = "\n\n".join(contexts)
 
     combined = combined[:120000]
 
@@ -1137,7 +1065,6 @@ def process_uploaded_files(
 
 
 LIBRARY_SYSTEM_PROMPT = """
-
 You are an intelligent AI Library Assistant.
 
 You support:
@@ -1169,35 +1096,19 @@ LANGUAGE:
 Automatically detect the language and writing
 style of the user's CURRENT request.
 
-Rules:
-
 English -> English.
 
 Urdu script -> Urdu script.
 
 Roman Urdu -> Roman Urdu.
 
-Mixed English/Urdu -> naturally follow
-the user's current style.
+Mixed English/Urdu -> naturally follow the user's style.
 
-If the user explicitly asks for another
-language, follow that instruction.
+If the user explicitly asks for another language,
+follow that instruction.
 
-Never force the language of an uploaded
-document onto the answer.
-
-For example:
-
-English PDF + Urdu question
-= Urdu answer.
-
-English PDF + Roman Urdu question
-= Roman Urdu answer.
-
-English image + Urdu question
-= Urdu answer.
-
-Do not ask the user to select a language.
+Never force the language of an uploaded document
+onto the answer language.
 
 LIBRARY ACCURACY:
 
@@ -1211,13 +1122,13 @@ Do not fabricate:
 - catalog records
 - availability
 
-Clearly distinguish verified catalog
-information from general knowledge.
+Clearly distinguish verified catalog information
+from general knowledge.
 
 ACADEMIC QUALITY:
 
-Use headings, bullets, numbered steps,
-examples and tables when useful.
+Use headings, bullets, numbered steps, examples
+and tables when useful.
 
 Keep explanations understandable.
 
@@ -1231,9 +1142,7 @@ Maintain conversation context.
 
 def get_history():
 
-    messages = chat_messages()
-
-    recent = messages[-12:]
+    recent = chat_messages()[-12:]
 
     history_parts = []
 
@@ -1253,7 +1162,7 @@ def get_history():
 
 
 
-# INTENT DETECTION
+# IMAGE GENERATION INTENT
 
 
 def looks_like_image_generation_request(
@@ -1288,9 +1197,11 @@ def looks_like_image_generation_request(
     )
 
 
-def detect_file_format(
-    text
-):
+
+# FILE GENERATION INTENT
+
+
+def detect_file_format(text):
 
     text_lower = text.lower()
 
@@ -1447,9 +1358,11 @@ def looks_like_file_generation_request(
     )
 
 
-def detect_intent(
-    text
-):
+
+# INTENT DETECTION
+
+
+def detect_intent(text):
 
     text_lower = text.lower()
 
@@ -1556,13 +1469,13 @@ def detect_intent(
 
 
 
-# NORMAL ANSWER
+# NORMAL LIBRARY ANSWER
 
 
 def answer_library_question(
     user_request,
     intent,
-    attachment_context=""
+    attachment_context="",
 ):
 
     specialized_instruction = ""
@@ -1643,14 +1556,11 @@ UPLOADED MATERIAL:
 
 Answer the user directly.
 
-If the user asks for an explanation,
-explain it.
+If the user asks for an explanation, explain it.
 
-If the user asks to analyze a file,
-analyze it.
+If the user asks to analyze a file, analyze it.
 
-If the user asks for a summary,
-summarize it.
+If the user asks for a summary, summarize it.
 
 Respect the user's language automatically.
 """
@@ -1673,6 +1583,7 @@ def create_image_prompt(
 Create a detailed image-generation prompt.
 
 Include:
+
 - subject
 - environment
 - composition
@@ -1699,14 +1610,14 @@ def generate_image(
 
         return (
             None,
-            "CLOUDFLARE_ACCOUNT_ID is missing."
+            "CLOUDFLARE_ACCOUNT_ID is missing.",
         )
 
     if not CLOUDFLARE_API_TOKEN:
 
         return (
             None,
-            "CLOUDFLARE_API_TOKEN is missing."
+            "CLOUDFLARE_API_TOKEN is missing.",
         )
 
     try:
@@ -1722,10 +1633,10 @@ def generate_image(
         )
 
         headers = {
-            "Authorization":
-                f"Bearer {CLOUDFLARE_API_TOKEN}",
-            "Content-Type":
-                "application/json",
+            "Authorization": (
+                f"Bearer {CLOUDFLARE_API_TOKEN}"
+            ),
+            "Content-Type": "application/json",
         }
 
         payload = {
@@ -1745,13 +1656,11 @@ def generate_image(
 
         result = response.json()
 
-        if not result.get(
-            "success"
-        ):
+        if not result.get("success"):
 
             return (
                 None,
-                str(result)
+                str(result),
             )
 
         image_data = (
@@ -1764,7 +1673,7 @@ def generate_image(
 
             return (
                 None,
-                "Cloudflare returned no image."
+                "Cloudflare returned no image.",
             )
 
         image_bytes = base64.b64decode(
@@ -1777,7 +1686,7 @@ def generate_image(
 
         return (
             image,
-            None
+            None,
         )
 
     except Exception as e:
@@ -1787,7 +1696,7 @@ def generate_image(
             (
                 f"{type(e).__name__}: "
                 f"{str(e)}"
-            )
+            ),
         )
 
 
@@ -1976,9 +1885,7 @@ def generate_pdf(
 
             story.append(
                 Paragraph(
-                    html.escape(
-                        heading
-                    ),
+                    html.escape(heading),
                     heading_style,
                 )
             )
@@ -2001,24 +1908,18 @@ def generate_pdf(
 
         else:
 
-            clean = (
-                clean_markdown_for_text(
-                    line
-                )
+            clean = clean_markdown_for_text(
+                line
             )
 
             story.append(
                 Paragraph(
-                    html.escape(
-                        clean
-                    ),
+                    html.escape(clean),
                     body_style,
                 )
             )
 
-    document.build(
-        story
-    )
+    document.build(story)
 
     return output.getvalue()
 
@@ -2068,13 +1969,12 @@ def parse_markdown_table(
 
         if len(row) < len(columns):
 
-            row += (
-                [""] *
-                (
-                    len(columns)
-                    - len(row)
+            row += [
+                ""
+                for _ in range(
+                    len(columns) - len(row)
                 )
-            )
+            ]
 
         data_rows.append(
             row[:len(columns)]
@@ -2082,7 +1982,7 @@ def parse_markdown_table(
 
     return (
         columns,
-        data_rows
+        data_rows,
     )
 
 
@@ -2104,15 +2004,11 @@ def generate_xlsx(
 
         columns, rows = table
 
-        sheet.append(
-            columns
-        )
+        sheet.append(columns)
 
         for row in rows[:500]:
 
-            sheet.append(
-                row
-            )
+            sheet.append(row)
 
     else:
 
@@ -2148,11 +2044,7 @@ def generate_xlsx(
 
                 max_length = max(
                     max_length,
-                    len(
-                        str(
-                            cell.value
-                        )
-                    ),
+                    len(str(cell.value)),
                 )
 
         sheet.column_dimensions[
@@ -2164,9 +2056,7 @@ def generate_xlsx(
 
     output = BytesIO()
 
-    workbook.save(
-        output
-    )
+    workbook.save(output)
 
     return output.getvalue()
 
@@ -2213,12 +2103,9 @@ def generate_txt(
     content
 ):
 
-    return (
-        clean_markdown_for_text(
-            content
-        )
-        .encode("utf-8")
-    )
+    return clean_markdown_for_text(
+        content
+    ).encode("utf-8")
 
 
 def generate_markdown(
@@ -2231,13 +2118,13 @@ def generate_markdown(
 
 
 
-# PRESENTATION
+# POWERPOINT
 
 
 def generate_presentation_structure(
     user_request,
     content,
-    attachment_context=""
+    attachment_context="",
 ):
 
     system = """
@@ -2264,7 +2151,9 @@ Format:
 Create a logical presentation.
 
 Do not use markdown.
+
 Do not include speaker notes.
+
 Keep slides concise.
 """
 
@@ -2313,14 +2202,10 @@ Create the presentation structure.
     except Exception:
 
         return {
-            "title":
-                user_request[:80],
-
+            "title": user_request[:80],
             "slides": [
                 {
-                    "title":
-                        "Overview",
-
+                    "title": "Overview",
                     "bullets": [
                         clean_markdown_for_text(
                             content[:800]
@@ -2338,35 +2223,21 @@ def generate_pptx(
 
     presentation = Presentation()
 
-    # --------------------------------------------------------
-    # TITLE
-    # --------------------------------------------------------
-
     title_slide = (
         presentation.slides.add_slide(
             presentation.slide_layouts[0]
         )
     )
 
-    title_slide.shapes.title.text = (
-        title
-    )
+    title_slide.shapes.title.text = title
 
-    if (
-        len(
-            title_slide.placeholders
-        ) > 1
-    ):
+    if len(
+        title_slide.placeholders
+    ) > 1:
 
-        title_slide.placeholders[
-            1
-        ].text = (
+        title_slide.placeholders[1].text = (
             "AI Library Assistant"
         )
-
-    # --------------------------------------------------------
-    # CONTENT
-    # --------------------------------------------------------
 
     for slide_data in slides:
 
@@ -2383,13 +2254,9 @@ def generate_pptx(
             )
         )
 
-        body = (
-            slide.placeholders[1]
-        )
+        body = slide.placeholders[1]
 
-        text_frame = (
-            body.text_frame
-        )
+        text_frame = body.text_frame
 
         text_frame.clear()
 
@@ -2426,30 +2293,28 @@ def generate_pptx(
 
     output = BytesIO()
 
-    presentation.save(
-        output
-    )
+    presentation.save(output)
 
     return output.getvalue()
 
 
 
-# FILE CONTENT GENERATION
+# GENERATE FILE CONTENT
 
 
 def generate_file_content(
     user_request,
-    attachment_context=""
+    attachment_context="",
 ):
 
     system = """
-You are the content-generation engine
-of an AI Library Assistant.
+You are the content-generation engine of
+an AI Library Assistant.
 
 The user wants a downloadable file.
 
-Create the complete useful content
-for the requested file.
+Create complete useful content for the
+requested file.
 
 Rules:
 
@@ -2485,7 +2350,7 @@ Create the final content.
 
 def generate_downloadable_file(
     user_request,
-    attachment_context=""
+    attachment_context="",
 ):
 
     file_format = detect_file_format(
@@ -2513,44 +2378,37 @@ def generate_downloadable_file(
 
     if not safe_name:
 
-        safe_name = (
-            "library_content"
-        )
+        safe_name = "library_content"
 
     if file_format == "docx":
 
         return {
-            "data":
-                generate_docx(
-                    content
-                ),
-
-            "name":
-                f"{safe_name}_{timestamp}.docx",
-
-            "mime":
-                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-
-            "content":
-                content,
+            "data": generate_docx(
+                content
+            ),
+            "name": (
+                f"{safe_name}_"
+                f"{timestamp}.docx"
+            ),
+            "mime": (
+                "application/vnd.openxmlformats-officedocument."
+                "wordprocessingml.document"
+            ),
+            "content": content,
         }
 
     if file_format == "pdf":
 
         return {
-            "data":
-                generate_pdf(
-                    content
-                ),
-
-            "name":
-                f"{safe_name}_{timestamp}.pdf",
-
-            "mime":
-                "application/pdf",
-
-            "content":
-                content,
+            "data": generate_pdf(
+                content
+            ),
+            "name": (
+                f"{safe_name}_"
+                f"{timestamp}.pdf"
+            ),
+            "mime": "application/pdf",
+            "content": content,
         }
 
     if file_format == "pptx":
@@ -2564,98 +2422,84 @@ def generate_downloadable_file(
         )
 
         return {
-            "data":
-                generate_pptx(
-                    presentation.get(
-                        "title",
-                        "Library Presentation",
-                    ),
-                    presentation.get(
-                        "slides",
-                        [],
-                    ),
+            "data": generate_pptx(
+                presentation.get(
+                    "title",
+                    "Library Presentation",
                 ),
-
-            "name":
-                f"{safe_name}_{timestamp}.pptx",
-
-            "mime":
-                "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-
-            "content":
-                content,
+                presentation.get(
+                    "slides",
+                    [],
+                ),
+            ),
+            "name": (
+                f"{safe_name}_"
+                f"{timestamp}.pptx"
+            ),
+            "mime": (
+                "application/vnd.openxmlformats-officedocument."
+                "presentationml.presentation"
+            ),
+            "content": content,
         }
 
     if file_format == "xlsx":
 
         return {
-            "data":
-                generate_xlsx(
-                    content
-                ),
-
-            "name":
-                f"{safe_name}_{timestamp}.xlsx",
-
-            "mime":
-                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-
-            "content":
-                content,
+            "data": generate_xlsx(
+                content
+            ),
+            "name": (
+                f"{safe_name}_"
+                f"{timestamp}.xlsx"
+            ),
+            "mime": (
+                "application/vnd.openxmlformats-officedocument."
+                "spreadsheetml.sheet"
+            ),
+            "content": content,
         }
 
     if file_format == "csv":
 
         return {
-            "data":
-                generate_csv(
-                    content
-                ),
-
-            "name":
-                f"{safe_name}_{timestamp}.csv",
-
-            "mime":
-                "text/csv",
-
-            "content":
-                content,
+            "data": generate_csv(
+                content
+            ),
+            "name": (
+                f"{safe_name}_"
+                f"{timestamp}.csv"
+            ),
+            "mime": "text/csv",
+            "content": content,
         }
 
     if file_format == "txt":
 
         return {
-            "data":
-                generate_txt(
-                    content
-                ),
-
-            "name":
-                f"{safe_name}_{timestamp}.txt",
-
-            "mime":
-                "text/plain",
-
-            "content":
-                content,
+            "data": generate_txt(
+                content
+            ),
+            "name": (
+                f"{safe_name}_"
+                f"{timestamp}.txt"
+            ),
+            "mime": "text/plain",
+            "content": content,
         }
 
     if file_format == "md":
 
         return {
-            "data":
-                generate_markdown(
-                    content
-                ),
-
-            "name":
-                f"{safe_name}_{timestamp}.md",
-
-            "mime":
-                "text/markdown",
-
-            "content":
-                content,
+            "data": generate_markdown(
+                content
+            ),
+            "name": (
+                f"{safe_name}_"
+                f"{timestamp}.md"
+            ),
+            "mime": "text/markdown",
+            "content": content,
         }
 
     return None
@@ -2667,12 +2511,12 @@ def generate_downloadable_file(
 
 def copy_button(
     text,
-    button_id
+    button_id,
 ):
 
     safe_text = json.dumps(
         text,
-        ensure_ascii=False
+        ensure_ascii=False,
     )
 
     html_block = f"""
@@ -2684,7 +2528,8 @@ def copy_button(
 
         <style>
 
-            html, body {{
+            html,
+            body {{
                 margin: 0;
                 padding: 0;
                 background: transparent;
@@ -2748,31 +2593,34 @@ def copy_button(
 
                 try {{
 
-                    await navigator.clipboard.writeText(
-                        textToCopy
-                    );
+                    await navigator.clipboard
+                        .writeText(
+                            textToCopy
+                        );
 
                     button.innerText =
                         "✓ Copied";
 
-                    setTimeout(() => {{
-
-                        button.innerText =
-                            "📋 Copy";
-
-                    }}, 1500);
+                    setTimeout(
+                        () => {{
+                            button.innerText =
+                                "📋 Copy";
+                        }},
+                        1500
+                    );
 
                 }} catch (error) {{
 
                     button.innerText =
                         "Copy failed";
 
-                    setTimeout(() => {{
-
-                        button.innerText =
-                            "📋 Copy";
-
-                    }}, 1500);
+                    setTimeout(
+                        () => {{
+                            button.innerText =
+                                "📋 Copy";
+                        }},
+                        1500
+                    );
 
                 }}
 
@@ -2787,7 +2635,7 @@ def copy_button(
 
     st.iframe(
         html_block,
-        height=45
+        height=45,
     )
 
 
@@ -2816,7 +2664,10 @@ with st.sidebar:
         "### 💬 Chat History"
     )
 
-    for chat_id, chat in reversed(
+    for (
+        chat_id,
+        chat,
+    ) in reversed(
         list(
             st.session_state.chats.items()
         )
@@ -2920,6 +2771,7 @@ with st.sidebar:
 
 
 # HEADER
+
 
 st.markdown(
     """
@@ -3033,11 +2885,12 @@ st.markdown(
     unsafe_allow_html=True
 )
 
+
+
 # CURRENT ATTACHMENTS
 
-if current_chat()[
-    "attachment_names"
-]:
+
+if current_chat()["attachment_names"]:
 
     names_html = " ".join(
         [
@@ -3046,7 +2899,8 @@ if current_chat()[
                 f'📎 {html.escape(name)}'
                 "</span>"
             )
-            for name in current_chat()[
+            for name in
+            current_chat()[
                 "attachment_names"
             ]
         ]
@@ -3058,7 +2912,9 @@ if current_chat()[
     )
 
 
+
 # DISPLAY CHAT
+
 
 for index, message in enumerate(
     chat_messages()
@@ -3070,19 +2926,11 @@ for index, message in enumerate(
 
     with st.chat_message(role):
 
-        # ----------------------------------------------------
-        # SHOW USER / ASSISTANT TEXT
-        # ----------------------------------------------------
-
         st.markdown(content)
-
-        # ----------------------------------------------------
-        # SHOW ACTUAL UPLOADED IMAGE
-        # ----------------------------------------------------
 
         message_images = message.get(
             "images",
-            []
+            [],
         )
 
         if message_images:
@@ -3099,21 +2947,19 @@ for index, message in enumerate(
 
                     st.image(
                         image,
-                        caption=image_data["name"],
+                        caption=image_data[
+                            "name"
+                        ],
                         width=500,
                     )
 
                 except Exception as e:
 
                     st.warning(
-                        f"Could not display "
+                        "Could not display "
                         f"{image_data.get('name', 'image')}: "
                         f"{str(e)}"
                     )
-
-        # ----------------------------------------------------
-        # COPY BUTTON FOR AI RESPONSES
-        # ----------------------------------------------------
 
         if role == "assistant":
 
@@ -3122,7 +2968,10 @@ for index, message in enumerate(
                 f"copy_{index}",
             )
 
+
+
 # GENERATED IMAGE
+
 
 if st.session_state.generated_image:
 
@@ -3153,7 +3002,9 @@ if st.session_state.generated_image:
     )
 
 
+
 # GENERATED FILE
+
 
 if st.session_state.generated_file:
 
@@ -3177,13 +3028,16 @@ if st.session_state.generated_file:
     )
 
 
+
 # CHAT INPUT
 
+
 chat_input = st.chat_input(
-    "Ask anything about libraries, research, documents, or learning...",
-
+    (
+        "Ask anything about libraries, "
+        "research, documents, or learning..."
+    ),
     accept_file="multiple",
-
     file_type=[
         "pdf",
         "docx",
@@ -3199,11 +3053,13 @@ chat_input = st.chat_input(
         "webp",
         "gif",
     ],
-
     max_upload_size=20,
 )
 
+
+
 # PROCESS USER REQUEST
+
 
 if chat_input:
 
@@ -3217,14 +3073,10 @@ if chat_input:
         chat_input.files
         if hasattr(
             chat_input,
-            "files"
+            "files",
         )
         else []
     )
-
-    # --------------------------------------------------------
-    # FILE ONLY
-    # --------------------------------------------------------
 
     if (
         not user_request
@@ -3236,12 +3088,10 @@ if chat_input:
             "file(s) and explain what they contain."
         )
 
-    # --------------------------------------------------------
-    # PROCESS UPLOADS
-    # --------------------------------------------------------
-
     attachment_context = ""
+
     attachment_names = []
+
     uploaded_images = []
 
     if uploaded_files:
@@ -3275,10 +3125,6 @@ if chat_input:
             ]
         )
 
-    # --------------------------------------------------------
-    # SAVE USER MESSAGE
-    # --------------------------------------------------------
-
     display_user_message = (
         user_request
     )
@@ -3298,151 +3144,22 @@ if chat_input:
         images=uploaded_images,
     )
 
-    # --------------------------------------------------------
-    # CHAT TITLE
-    # --------------------------------------------------------
-
-    if (
-        len(chat_messages()) <= 1
-        and user_request
-    ):
+    if len(chat_messages()) <= 1:
 
         set_chat_title(
             user_request
         )
 
-    # --------------------------------------------------------
-    # INTENT
-    # --------------------------------------------------------
-
     intent = detect_intent(
         user_request
     )
 
-    # ========================================================
-    # IMAGE UPLOAD HANDLING
-    # ========================================================
-
-    if uploaded_images:
-
-        # ----------------------------------------------------
-        # The image has already been analyzed by the Vision
-        # model inside process_uploaded_file().
-        #
-        # DO NOT send the image to Vision a second time.
-        # ----------------------------------------------------
-
-        vision_answers = []
-
-        for image_data in uploaded_images:
-
-            filename = image_data["name"]
-
-            marker = (
-                f"IMAGE: {filename}"
-            )
-
-            vision_result = ""
-
-            # ------------------------------------------------
-            # Extract already-generated Vision response
-            # ------------------------------------------------
-
-            if marker in attachment_context:
-
-                parts = (
-                    attachment_context.split(
-                        marker,
-                        1,
-                    )
-                )
-
-                if len(parts) > 1:
-
-                    vision_result = (
-                        parts[1].strip()
-                    )
-
-            # ------------------------------------------------
-            # Fallback
-            # ------------------------------------------------
-
-            if not vision_result:
-
-                vision_result = (
-                    "The image was uploaded successfully, "
-                    "but no visual analysis was returned."
-                )
-
-            vision_answers.append(
-                f"### 🖼️ {filename}\n\n"
-                f"{vision_result}"
-            )
-
-        assistant_message = (
-            "\n\n".join(
-                vision_answers
-            )
-        )
-
-        add_message(
-            "assistant",
-            assistant_message,
-        )
-
-        st.session_state.generated_file = None
-        st.session_state.generated_image = None
-
-        st.rerun()
-
-    # ========================================================
-    # IMAGE GENERATION
-    # ========================================================
-
-    elif intent == "IMAGE_GENERATION":
-
-        with st.spinner(
-            "Generating your image..."
-        ):
-
-            image, error = (
-                generate_image(
-                    user_request
-                )
-            )
-
-        if image:
-
-            st.session_state.generated_image = (
-                image
-            )
-
-            st.session_state.generated_file = None
-
-            assistant_message = (
-                "I've generated the image "
-                "based on your request."
-            )
-
-        else:
-
-            assistant_message = (
-                "I couldn't generate the image.\n\n"
-                f"**Error:** {error}"
-            )
-
-        add_message(
-            "assistant",
-            assistant_message,
-        )
-
-        st.rerun()
 
     # ========================================================
     # FILE GENERATION
     # ========================================================
 
-    elif intent == "FILE_GENERATION":
+    if intent == "FILE_GENERATION":
 
         with st.spinner(
             "Preparing your downloadable file..."
@@ -3496,6 +3213,121 @@ if chat_input:
 
         st.rerun()
 
+
+    # ========================================================
+    # IMAGE GENERATION
+    # ========================================================
+
+    elif intent == "IMAGE_GENERATION":
+
+        with st.spinner(
+            "Generating your image..."
+        ):
+
+            image, error = generate_image(
+                user_request
+            )
+
+        if image:
+
+            st.session_state.generated_image = (
+                image
+            )
+
+            st.session_state.generated_file = (
+                None
+            )
+
+            assistant_message = (
+                "I've generated the image "
+                "based on your request."
+            )
+
+        else:
+
+            assistant_message = (
+                "I couldn't generate the image.\n\n"
+                f"**Error:** {error}"
+            )
+
+        add_message(
+            "assistant",
+            assistant_message,
+        )
+
+        st.rerun()
+
+
+    # ========================================================
+    # IMAGE UPLOAD / VISION
+    # ========================================================
+
+    elif uploaded_images:
+
+        vision_answers = []
+
+        for image_data in uploaded_images:
+
+            filename = image_data[
+                "name"
+            ]
+
+            marker = (
+                f"IMAGE: {filename}"
+            )
+
+            vision_result = ""
+
+            if marker in attachment_context:
+
+                parts = (
+                    attachment_context.split(
+                        marker,
+                        1,
+                    )
+                )
+
+                if len(parts) > 1:
+
+                    vision_result = (
+                        parts[1].strip()
+                    )
+
+            if not vision_result:
+
+                vision_result = (
+                    "The image was uploaded "
+                    "successfully, but no visual "
+                    "analysis was returned."
+                )
+
+            vision_answers.append(
+                f"### 🖼️ {filename}\n\n"
+                f"{vision_result}"
+            )
+
+        assistant_message = (
+            "\n\n".join(
+                vision_answers
+            )
+        )
+
+        add_message(
+            "assistant",
+            assistant_message,
+        )
+
+        st.session_state.generated_file = (
+            None
+        )
+
+        st.session_state.generated_image = (
+            None
+        )
+
+        st.rerun()
+
+
     # ========================================================
     # CATALOG SEARCH
     # ========================================================
@@ -3539,13 +3371,19 @@ if chat_input:
             assistant_message,
         )
 
-        st.session_state.generated_file = None
-        st.session_state.generated_image = None
+        st.session_state.generated_file = (
+            None
+        )
+
+        st.session_state.generated_image = (
+            None
+        )
 
         st.rerun()
 
+
     # ========================================================
-    # NORMAL LIBRARY / DOCUMENT QUESTION
+    # NORMAL QUESTION
     # ========================================================
 
     else:
@@ -3567,8 +3405,13 @@ if chat_input:
             assistant_message,
         )
 
-        st.session_state.generated_file = None
-        st.session_state.generated_image = None
+        st.session_state.generated_file = (
+            None
+        )
+
+        st.session_state.generated_image = (
+            None
+        )
 
         st.rerun()
 
