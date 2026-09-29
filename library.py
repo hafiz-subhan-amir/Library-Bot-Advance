@@ -3511,14 +3511,17 @@ if chat_input:
     )
 
     if len(chat_messages()) == 1:
-    try:
-        chat_title = generate_chat_title(user_request)
+        try:
+            chat_title = generate_chat_title(user_request)
 
-        if chat_title:
-            set_chat_title(chat_title)
+            if chat_title:
+                set_chat_title(chat_title)
 
-    except Exception:
-        set_chat_title(user_request)
+        except Exception:
+            set_chat_title(user_request)
+
+# DETECT INTENT
+intent = detect_intent(user_request)
 
     
     # DETECT INTENT
