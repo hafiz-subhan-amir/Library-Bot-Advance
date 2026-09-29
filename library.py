@@ -3511,18 +3511,18 @@ if chat_input:
     )
 
     if len(chat_messages()) == 1:
-            chat_title = generate_chat_title(
-        user_request
-    )
-    set_chat_title(chat_title)
+    try:
+        chat_title = generate_chat_title(user_request)
+
+        if chat_title:
+            set_chat_title(chat_title)
+
+    except Exception:
+        set_chat_title(user_request)
 
     
     # DETECT INTENT
-    
-
-    intent = detect_intent(
-        user_request
-    )
+intent = detect_intent(user_request)
 
     
     # FILE GENERATION
