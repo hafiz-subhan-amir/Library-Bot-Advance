@@ -3520,10 +3520,7 @@ if chat_input:
         except Exception:
             set_chat_title(user_request)
 
-# DETECT INTENT
-intent = detect_intent(user_request)
-
-    
+   
     # DETECT INTENT
 intent = detect_intent(user_request)
 
