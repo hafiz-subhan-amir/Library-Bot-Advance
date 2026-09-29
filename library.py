@@ -56,10 +56,6 @@ def get_secret(name, default=None):
         Falls back to .env / environment variables.
     """
 
-    # --------------------------------------------------------
-    # STREAMLIT SECRETS
-    # --------------------------------------------------------
-
     try:
         value = st.secrets[name]
 
@@ -68,10 +64,6 @@ def get_secret(name, default=None):
 
     except Exception:
         pass
-
-    # --------------------------------------------------------
-    # ENVIRONMENT VARIABLES / .ENV
-    # --------------------------------------------------------
 
     value = os.getenv(name)
 
@@ -1165,36 +1157,129 @@ def get_history():
 # IMAGE GENERATION INTENT
 
 
-def looks_like_image_generation_request(
-    text
-):
+def looks_like_image_generation_request(text):
+    """
+    Detect natural-language image generation requests.
 
-    text_lower = text.lower()
+    Examples recognized:
 
-    patterns = [
-        "generate an image",
-        "generate image",
-        "create an image",
-        "create image",
-        "make an image",
-        "make image",
-        "draw an image",
-        "draw image",
-        "generate a picture",
-        "create a picture",
-        "make a picture",
-        "design an image",
-        "visualize",
-        "generate artwork",
-        "create artwork",
-        "generate a poster",
-        "create a poster",
+    generate an image
+    generate me an image
+    generate an image of a library
+    create me a picture
+    make an image of...
+    make me a picture
+    draw me...
+    can you create an image...
+    I want an image of...
+    show me an image of...
+    generate artwork...
+    create a poster...
+    visualize...
+    """
+
+    if not text:
+        return False
+
+    text_lower = re.sub(
+        r"\s+",
+        " ",
+        text.lower().strip(),
+    )
+
+    # Direct image-generation actions.
+    action_patterns = [
+        r"\b(generate|create|make|draw|design|produce|render)\b"
+        r".{0,40}"
+        r"\b(image|picture|photo|artwork|illustration|visual|poster)\b",
+
+        r"\b(image|picture|photo|artwork|illustration|visual|poster)\b"
+        r".{0,40}"
+        r"\b(generate|create|make|draw|design|produce|render)\b",
     ]
 
-    return any(
-        phrase in text_lower
-        for phrase in patterns
-    )
+    for pattern in action_patterns:
+
+        if re.search(
+            pattern,
+            text_lower,
+            flags=re.IGNORECASE,
+        ):
+
+            return True
+
+    # Direct requests such as:
+    # "show me an image of..."
+    if re.search(
+        r"\b(show|give|provide)\b"
+        r".{0,30}"
+        r"\b(an?\s+)?"
+        r"(image|picture|photo|visual)\b",
+        text_lower,
+    ):
+
+        return True
+
+    # "I want an image of..."
+    if re.search(
+        r"\b(i want|i need|i would like|i'd like)\b"
+        r".{0,30}"
+        r"\b(an?\s+)?"
+        r"(image|picture|photo|visual|artwork)\b",
+        text_lower,
+    ):
+
+        return True
+
+    # "visualize..."
+    if re.search(
+        r"\bvisuali[sz]e\b",
+        text_lower,
+    ):
+
+        return True
+
+    # "draw me..."
+    if re.search(
+        r"\bdraw\s+(me\s+)?",
+        text_lower,
+    ) and any(
+        word in text_lower
+        for word in [
+            "image",
+            "picture",
+            "person",
+            "scene",
+            "library",
+            "book",
+            "poster",
+            "art",
+        ]
+    ):
+
+        return True
+
+    # Poster-specific requests.
+    if re.search(
+        r"\b(create|make|design|generate)\b"
+        r".{0,30}"
+        r"\bposter\b",
+        text_lower,
+    ):
+
+        return True
+
+    # Artwork-specific requests.
+    if re.search(
+        r"\b(create|make|generate|draw|design)\b"
+        r".{0,30}"
+        r"\bartwork\b",
+        text_lower,
+    ):
+
+        return True
+
+    return False
 
 
 
@@ -1203,8 +1288,12 @@ def looks_like_image_generation_request(
 
 def detect_file_format(text):
 
+    if not text:
+        return None
+
     text_lower = text.lower()
 
+    # PowerPoint
     if any(
         phrase in text_lower
         for phrase in [
@@ -1218,6 +1307,7 @@ def detect_file_format(text):
 
         return "pptx"
 
+    # PDF
     if any(
         phrase in text_lower
         for phrase in [
@@ -1228,6 +1318,7 @@ def detect_file_format(text):
 
         return "pdf"
 
+    # Word
     if any(
         phrase in text_lower
         for phrase in [
@@ -1240,6 +1331,7 @@ def detect_file_format(text):
 
         return "docx"
 
+    # Excel
     if any(
         phrase in text_lower
         for phrase in [
@@ -1252,6 +1344,7 @@ def detect_file_format(text):
 
         return "xlsx"
 
+    # CSV
     if any(
         phrase in text_lower
         for phrase in [
@@ -1262,6 +1355,7 @@ def detect_file_format(text):
 
         return "csv"
 
+    # Markdown
     if any(
         phrase in text_lower
         for phrase in [
@@ -1273,6 +1367,7 @@ def detect_file_format(text):
 
         return "md"
 
+    # Text
     if any(
         phrase in text_lower
         for phrase in [
@@ -1284,6 +1379,7 @@ def detect_file_format(text):
 
         return "txt"
 
+    # Report -> PDF
     if any(
         phrase in text_lower
         for phrase in [
@@ -1291,6 +1387,7 @@ def detect_file_format(text):
             "generate a report",
             "create a report",
             "prepare a report",
+            "make a report",
         ]
     ):
 
@@ -1299,26 +1396,41 @@ def detect_file_format(text):
     return None
 
 
-def looks_like_file_generation_request(
-    text
-):
+def looks_like_file_generation_request(text):
 
-    text_lower = text.lower()
+    if not text:
+        return False
+
+    text_lower = re.sub(
+        r"\s+",
+        " ",
+        text.lower().strip(),
+    )
 
     requested_format = detect_file_format(
         text
     )
 
-    action_words = [
-        "generate",
-        "create",
-        "prepare",
-        "make",
-        "export",
-        "download",
-        "save",
-        "convert",
+    # --------------------------------------------------------
+    # Explicit file actions
+    # --------------------------------------------------------
+
+    action_patterns = [
+        r"\b(generate|create|prepare|make|export|download|save|convert|build)\b",
+        r"\b(turn|convert)\b",
     ]
+
+    has_action = any(
+        re.search(
+            pattern,
+            text_lower,
+        )
+        for pattern in action_patterns
+    )
+
+    # --------------------------------------------------------
+    # File-related words
+    # --------------------------------------------------------
 
     file_words = [
         "file",
@@ -1326,6 +1438,7 @@ def looks_like_file_generation_request(
         "report",
         "presentation",
         "slides",
+        "slide deck",
         "spreadsheet",
         "excel",
         "word",
@@ -1337,25 +1450,46 @@ def looks_like_file_generation_request(
         "csv",
         "markdown",
         "text file",
+        "downloadable",
     ]
-
-    has_action = any(
-        word in text_lower
-        for word in action_words
-    )
 
     has_file_word = any(
         word in text_lower
         for word in file_words
     )
 
-    return (
-        requested_format is not None
-        or (
-            has_action
-            and has_file_word
-        )
-    )
+    # --------------------------------------------------------
+    # If there is a recognized format, require an action.
+    #
+    # This prevents:
+    #
+    # "What is a PDF?"
+    # "Explain Excel"
+    # "What is PowerPoint?"
+    #
+    # from generating files.
+    # --------------------------------------------------------
+
+    if requested_format:
+
+        return has_action
+
+    # --------------------------------------------------------
+    # Natural file requests without explicit extension.
+    #
+    # Examples:
+    #
+    # "make me a document"
+    # "create a downloadable file"
+    # "prepare a report"
+    # "make me a presentation"
+    # --------------------------------------------------------
+
+    if has_action and has_file_word:
+
+        return True
+
+    return False
 
 
 
@@ -1366,17 +1500,40 @@ def detect_intent(text):
 
     text_lower = text.lower()
 
-    if looks_like_file_generation_request(
-        text
-    ):
-
-        return "FILE_GENERATION"
+    # --------------------------------------------------------
+    # IMAGE GENERATION FIRST
+    # --------------------------------------------------------
+    #
+    # This is intentionally checked before normal questions
+    # and before uploaded-image analysis.
+    #
+    # Example:
+    #
+    # "generate me an image of a person searching for books"
+    #
+    # -> IMAGE_GENERATION
+    #
+    # --------------------------------------------------------
 
     if looks_like_image_generation_request(
         text
     ):
 
         return "IMAGE_GENERATION"
+
+    # --------------------------------------------------------
+    # FILE GENERATION
+    # --------------------------------------------------------
+
+    if looks_like_file_generation_request(
+        text
+    ):
+
+        return "FILE_GENERATION"
+
+    # --------------------------------------------------------
+    # CATALOG
+    # --------------------------------------------------------
 
     if any(
         word in text_lower
@@ -1391,6 +1548,10 @@ def detect_intent(text):
 
         return "CATALOG_SEARCH"
 
+    # --------------------------------------------------------
+    # SUMMARIZATION
+    # --------------------------------------------------------
+
     if any(
         word in text_lower
         for word in [
@@ -1401,6 +1562,10 @@ def detect_intent(text):
     ):
 
         return "SUMMARIZER"
+
+    # --------------------------------------------------------
+    # CITATIONS
+    # --------------------------------------------------------
 
     if any(
         word in text_lower
@@ -1415,6 +1580,10 @@ def detect_intent(text):
 
         return "CITATION_ASSISTANT"
 
+    # --------------------------------------------------------
+    # CATALOGUING
+    # --------------------------------------------------------
+
     if any(
         word in text_lower
         for word in [
@@ -1428,6 +1597,10 @@ def detect_intent(text):
 
         return "CATALOGUING_ASSISTANT"
 
+    # --------------------------------------------------------
+    # INFORMATION LITERACY
+    # --------------------------------------------------------
+
     if any(
         word in text_lower
         for word in [
@@ -1439,6 +1612,10 @@ def detect_intent(text):
     ):
 
         return "INFORMATION_LITERACY"
+
+    # --------------------------------------------------------
+    # RESEARCH
+    # --------------------------------------------------------
 
     if any(
         word in text_lower
@@ -1452,6 +1629,10 @@ def detect_intent(text):
 
         return "RESEARCH_ASSISTANT"
 
+    # --------------------------------------------------------
+    # WRITING
+    # --------------------------------------------------------
+
     if any(
         word in text_lower
         for word in [
@@ -1464,6 +1645,10 @@ def detect_intent(text):
     ):
 
         return "WRITING_ASSISTANT"
+
+    # --------------------------------------------------------
+    # GENERAL
+    # --------------------------------------------------------
 
     return "GENERAL_LIBRARY"
 
@@ -1580,9 +1765,13 @@ def create_image_prompt(
 ):
 
     system = """
-Create a detailed image-generation prompt.
+You are the internal prompt-writing component
+of an AI image generation system.
 
-Include:
+Convert the user's image request into a detailed
+image-generation prompt.
+
+Include only useful visual information such as:
 
 - subject
 - environment
@@ -1592,8 +1781,16 @@ Include:
 - mood
 - important objects
 - perspective
+- camera framing
+- realism or artistic style when appropriate
 
-Return only the final image-generation prompt.
+Preserve the user's intended subject and meaning.
+
+Do not answer the user.
+
+Do not explain anything.
+
+Return ONLY the final image-generation prompt.
 """
 
     return ask_groq(
@@ -1622,9 +1819,30 @@ def generate_image(
 
     try:
 
+        # Groq is used internally only to improve
+        # the image prompt. The user never sees
+        # this prompt.
         prompt = create_image_prompt(
             user_request
         )
+
+        # If Groq itself returned an error,
+        # don't send that error as the image prompt.
+        if (
+            not prompt
+            or prompt.startswith(
+                "Error while contacting Groq:"
+            )
+            or prompt.startswith(
+                "GROQ_API_KEY is missing"
+            )
+        ):
+
+            return (
+                None,
+                prompt
+                or "Could not create the image prompt.",
+            )
 
         url = (
             "https://api.cloudflare.com/client/v4/"
@@ -3149,6 +3367,10 @@ if chat_input:
         set_chat_title(
             user_request
         )
+
+    # ========================================================
+    # DETECT INTENT
+    # ========================================================
 
     intent = detect_intent(
         user_request
