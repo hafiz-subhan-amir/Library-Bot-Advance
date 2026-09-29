@@ -1819,30 +1819,27 @@ def generate_image(
 
     try:
 
-        # Groq is used internally only to improve
-        # the image prompt. The user never sees
-        # this prompt.
+        # ----------------------------------------------------
+        # CREATE INTERNAL IMAGE PROMPT
+        # ----------------------------------------------------
+
         prompt = create_image_prompt(
             user_request
         )
 
-        # If Groq itself returned an error,
-        # don't send that error as the image prompt.
-        if (
-            not prompt
-            or prompt.startswith(
-                "Error while contacting Groq:"
-            )
-            or prompt.startswith(
-                "GROQ_API_KEY is missing"
-            )
-        ):
+        # Make sure the prompt is valid
+        if not prompt or not prompt.strip():
 
             return (
                 None,
-                prompt
-                or "Could not create the image prompt.",
+                "Could not create an image prompt.",
             )
+
+        prompt = prompt.strip()
+
+        # ----------------------------------------------------
+        # CLOUDFLARE WORKERS AI URL
+        # ----------------------------------------------------
 
         url = (
             "https://api.cloudflare.com/client/v4/"
@@ -1853,24 +1850,66 @@ def generate_image(
         headers = {
             "Authorization": (
                 f"Bearer {CLOUDFLARE_API_TOKEN}"
-            ),
-            "Content-Type": "application/json",
+            )
         }
 
-        payload = {
+        # ----------------------------------------------------
+        # IMPORTANT:
+        # FLUX 2 KLEIN 4B REQUIRES MULTIPART/FORM-DATA
+        # ----------------------------------------------------
+
+        form_data = {
             "prompt": prompt,
-            "width": IMAGE_WIDTH,
-            "height": IMAGE_HEIGHT,
+            "width": str(IMAGE_WIDTH),
+            "height": str(IMAGE_HEIGHT),
         }
 
         response = requests.post(
             url,
             headers=headers,
-            json=payload,
+            files={
+                key: (
+                    None,
+                    value
+                )
+                for key, value in form_data.items()
+            },
             timeout=180,
         )
 
-        response.raise_for_status()
+        # ----------------------------------------------------
+        # HANDLE CLOUDFLARE ERRORS
+        # ----------------------------------------------------
+
+        if not response.ok:
+
+            try:
+
+                error_data = response.json()
+
+                return (
+                    None,
+                    (
+                        "Cloudflare API error "
+                        f"(HTTP {response.status_code}):\n\n"
+                        f"{json.dumps(error_data, indent=2)}"
+                    ),
+                )
+
+            except Exception:
+
+                return (
+                    None,
+                    (
+                        "Cloudflare API error "
+                        f"(HTTP {response.status_code}):\n\n"
+                        f"{response.text}"
+                    ),
+                )
+
+        # ----------------------------------------------------
+        # PARSE RESPONSE
+        # ----------------------------------------------------
 
         result = response.json()
 
@@ -1878,8 +1917,16 @@ def generate_image(
 
             return (
                 None,
-                str(result),
+                (
+                    "Cloudflare returned an unsuccessful "
+                    "response:\n\n"
+                    f"{json.dumps(result, indent=2)}"
+                ),
             )
+
+        # ----------------------------------------------------
+        # GET GENERATED IMAGE
+        # ----------------------------------------------------
 
         image_data = (
             result
@@ -1891,8 +1938,15 @@ def generate_image(
 
             return (
                 None,
-                "Cloudflare returned no image.",
+                (
+                    "Cloudflare completed the request "
+                    "but returned no image data."
+                ),
             )
+
+        # ----------------------------------------------------
+        # BASE64 -> PIL IMAGE
+        # ----------------------------------------------------
 
         image_bytes = base64.b64decode(
             image_data
@@ -1907,6 +1961,23 @@ def generate_image(
             None,
         )
 
+    except requests.exceptions.Timeout:
+
+        return (
+            None,
+            "Cloudflare image generation timed out.",
+        )
+
+    except requests.exceptions.RequestException as e:
+
+        return (
+            None,
+            (
+                "Cloudflare connection error:\n\n"
+                f"{type(e).__name__}: {str(e)}"
+            ),
+        )
+
     except Exception as e:
 
         return (
@@ -1916,7 +1987,6 @@ def generate_image(
                 f"{str(e)}"
             ),
         )
-
 
 
 # FILE GENERATION HELPERS
