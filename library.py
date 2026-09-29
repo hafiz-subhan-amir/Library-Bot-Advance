@@ -393,7 +393,95 @@ def ask_groq(
             f"{type(e).__name__}: {str(e)}"
         )
 
+# CHAT TITLE GENERATION
 
+
+def generate_chat_title(
+    first_user_message
+):
+
+    """
+    Generate a short, meaningful title
+    from the user's first message.
+    """
+
+    if not first_user_message:
+
+        return "New chat"
+
+    system_prompt = """
+You generate short titles for chat history.
+
+Read the user's first message and identify
+the MAIN topic or intent.
+
+Rules:
+
+- Return ONLY the title.
+- Maximum 5 words.
+- Make it meaningful and specific.
+- Do not copy the entire user message.
+- Do not use quotation marks.
+- Do not use emojis.
+- Do not include words such as:
+  Chat, Conversation, Question, Request.
+- Focus on the actual subject.
+- If the user asks about a person,
+  use the person's name and main purpose.
+- If the user asks to create a file,
+  use the main topic, not "create file".
+- If the user asks for an image,
+  describe the main image subject.
+- Keep the title concise and natural.
+"""
+
+    try:
+
+        title = ask_groq(
+            system_prompt,
+            first_user_message,
+        )
+
+        title = re.sub(
+            r"[\r\n]+",
+            " ",
+            title,
+        )
+
+        title = re.sub(
+            r"[\"'`]",
+            "",
+            title,
+        )
+
+        title = re.sub(
+            r"\s+",
+            " ",
+            title,
+        ).strip()
+
+        if not title:
+
+            return "New chat"
+
+        return title[:55].strip()
+
+    except Exception:
+
+        words = (
+            first_user_message
+            .strip()
+            .split()
+        )
+
+        if len(words) <= 6:
+
+            return first_user_message.strip()
+
+        return (
+            " ".join(words[:6])
+            + "..."
+        )
 
 # GROQ VISION
 
@@ -944,9 +1032,9 @@ def process_uploaded_file(
         filename
     )
 
-    # --------------------------------------------------------
+    
     # IMAGE
-    # --------------------------------------------------------
+    
 
     if extension in SUPPORTED_IMAGES:
 
@@ -984,9 +1072,9 @@ def process_uploaded_file(
                 f"{str(e)}"
             )
 
-    # --------------------------------------------------------
+    
     # PDF
-    # --------------------------------------------------------
+    
 
     if extension == "pdf":
 
@@ -995,9 +1083,9 @@ def process_uploaded_file(
             + extract_pdf(file)
         )
 
-    # --------------------------------------------------------
+    
     # DOCX
-    # --------------------------------------------------------
+    
 
     if extension == "docx":
 
@@ -1006,9 +1094,9 @@ def process_uploaded_file(
             + extract_docx(file)
         )
 
-    # --------------------------------------------------------
+    
     # PPTX
-    # --------------------------------------------------------
+    
 
     if extension == "pptx":
 
@@ -1017,9 +1105,9 @@ def process_uploaded_file(
             + extract_pptx(file)
         )
 
-    # --------------------------------------------------------
+    
     # EXCEL
-    # --------------------------------------------------------
+    
 
     if extension in {
         "xlsx",
@@ -1031,9 +1119,9 @@ def process_uploaded_file(
             + extract_excel(file)
         )
 
-    # --------------------------------------------------------
+    
     # CSV
-    # --------------------------------------------------------
+    
 
     if extension == "csv":
 
@@ -1042,9 +1130,9 @@ def process_uploaded_file(
             + extract_csv(file)
         )
 
-    # --------------------------------------------------------
+    
     # TXT / MD
-    # --------------------------------------------------------
+    
 
     if extension in SUPPORTED_TEXT:
 
@@ -3364,9 +3452,9 @@ if chat_input:
 
     uploaded_images = []
 
-    # --------------------------------------------------------
+    
     # PROCESS UPLOADS
-    # --------------------------------------------------------
+    
 
     if uploaded_files:
 
@@ -3399,9 +3487,9 @@ if chat_input:
             ]
         )
 
-    # --------------------------------------------------------
+    
     # DISPLAY USER MESSAGE
-    # --------------------------------------------------------
+    
 
     display_user_message = (
         user_request
@@ -3422,23 +3510,27 @@ if chat_input:
         images=uploaded_images,
     )
 
-    if len(chat_messages()) <= 1:
+    if len(chat_messages()) == 1:
 
-        set_chat_title(
-            user_request
-        )
+    chat_title = generate_chat_title(
+        user_request
+    )
 
-    # --------------------------------------------------------
+    set_chat_title(
+        chat_title
+    )
+
+    
     # DETECT INTENT
-    # --------------------------------------------------------
+    
 
     intent = detect_intent(
         user_request
     )
 
-    # ========================================================
+    
     # FILE GENERATION
-    # ========================================================
+    
 
     if intent == "FILE_GENERATION":
 
@@ -3495,9 +3587,9 @@ if chat_input:
         st.rerun()
 
 
-    # ========================================================
+    
     # IMAGE GENERATION
-    # ========================================================
+    
 
     elif intent == "IMAGE_GENERATION":
 
@@ -3539,9 +3631,9 @@ if chat_input:
         st.rerun()
 
 
-    # ========================================================
+    
     # IMAGE UPLOAD / VISION
-    # ========================================================
+    
 
     elif uploaded_images:
 
@@ -3609,9 +3701,9 @@ if chat_input:
         st.rerun()
 
 
-    # ========================================================
+    
     # CATALOG SEARCH
-    # ========================================================
+    
 
     elif intent == "CATALOG_SEARCH":
 
@@ -3663,9 +3755,9 @@ if chat_input:
         st.rerun()
 
 
-    # ========================================================
+    
     # NORMAL QUESTION
-    # ========================================================
+    
 
     else:
 
