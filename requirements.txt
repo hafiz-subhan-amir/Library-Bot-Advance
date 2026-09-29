@@ -1,0 +1,15 @@
+streamlit
+python-dotenv
+pandas
+langchain
+langchain-core
+langchain-groq
+Pillow
+requests
+pypdf
+python-docx
+python-pptx
+openpyxl
+langchain-community
+langchain-text-splitters
+reportlab
