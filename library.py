@@ -545,33 +545,29 @@ Rules:
    the answer language.
 """
 
-        completion = (
-            client.chat.completions.create(
-                model=GROQ_VISION_MODEL,
-                messages=[
-                    {
-                        "role": "user",
-                        "content": [
-                            {
-                                "type": "text",
-                                "text": prompt,
-                            },
-                            {
-                                "type": "image_url",
-                                "image_url": {
-                                    "url": data_url
-                                },
-                            },
-                        ],
-                    }
-                ],
-                temperature=0.7,
-                max_completion_tokens=4096,
-                top_p=0.8,
-                stream=False,
-            )
-        )
-
+        completion = client.chat.completions.create(
+    model=GROQ_VISION_MODEL,
+    messages=[
+        {
+            "role": "user",
+            "content": [
+                {
+                    "type": "text",
+                    "text": vision_prompt,
+                },
+                {
+                    "type": "image_url",
+                    "image_url": {
+                        "url": image_data_url
+                    },
+                },
+            ],
+        }
+    ],
+    temperature=0.2,
+    max_completion_tokens=512,
+    stream=False,
+)
         if (
             not completion
             or not completion.choices
