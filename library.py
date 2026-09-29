@@ -543,31 +543,34 @@ Rules:
 8. Mixed language -> naturally follow the user's style.
 9. The uploaded image's language does not determine
    the answer language.
+10. Keep the answer concise and directly relevant
+    to the user's request.
 """
 
         completion = client.chat.completions.create(
-    model=GROQ_VISION_MODEL,
-    messages=[
-        {
-            "role": "user",
-            "content": [
+            model=GROQ_VISION_MODEL,
+            messages=[
                 {
-                    "type": "text",
-                    "text": vision_prompt,
-                },
-                {
-                    "type": "image_url",
-                    "image_url": {
-                        "url": image_data_url
-                    },
-                },
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": prompt,
+                        },
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": data_url
+                            },
+                        },
+                    ],
+                }
             ],
-        }
-    ],
-    temperature=0.2,
-    max_completion_tokens=512,
-    stream=False,
-)
+            temperature=0.2,
+            max_completion_tokens=512,
+            stream=False,
+        )
+
         if (
             not completion
             or not completion.choices
@@ -608,7 +611,6 @@ Rules:
                 f"{str(e)}"
             ),
         )
-
 
 
 # FILE TYPES
