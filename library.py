@@ -2616,158 +2616,168 @@ def generate_downloadable_file(
     user_request,
     attachment_context="",
 ):
-
-    file_format = detect_file_format(
-        user_request
-    )
+    file_format = detect_file_format(user_request)
 
     if not file_format:
-
         file_format = "docx"
 
+    # Generate the actual document content
     content = generate_file_content(
         user_request,
         attachment_context,
     )
 
-    timestamp = datetime.now().strftime(
-        "%Y%m%d_%H%M%S"
+    # Ask Groq to identify a clean document title
+    title_system = """
+You are a document-title extraction assistant.
+
+Extract the MAIN TOPIC or SUBJECT from the user's request.
+
+Rules:
+- Return ONLY the document title.
+- Do not explain anything.
+- Do not include the file format.
+- Do not include words such as:
+  generate, create, make, give me, file, document, word file,
+  PDF, PowerPoint, Excel, CSV, TXT, Markdown.
+- Remove unnecessary instructions.
+- Keep the title concise and professional.
+- The title should describe what the document is actually about.
+
+Example:
+
+User:
+"generate me a word file, my topic is artificial intelligence"
+
+Return:
+Artificial Intelligence
+
+Example:
+
+User:
+"create a PDF about library science"
+
+Return:
+Library Science
+
+Example:
+
+User:
+"make a presentation on machine learning"
+
+Return:
+Machine Learning
+"""
+
+    title_prompt = f"""
+USER REQUEST:
+
+{user_request}
+
+Extract the main document topic/title.
+"""
+
+    title = ask_groq(
+        title_system,
+        title_prompt,
     )
 
+    # Clean the title
+    title = re.sub(r"[\r\n]+", " ", title)
+    title = re.sub(
+        r"[^a-zA-Z0-9\s_-]",
+        "",
+        title,
+    )
+    title = re.sub(r"\s+", " ", title).strip()
+
+    # Fallback if title extraction fails
+    if not title or len(title) < 2:
+        title = "Library_Document"
+
+    # Limit filename length
+    title = title[:80].strip()
+
+    # Convert spaces to underscores
     safe_name = re.sub(
-        r"[^a-zA-Z0-9_-]+",
+        r"\s+",
         "_",
-        user_request[:40],
-    ).strip("_")
+        title,
+    )
 
-    if not safe_name:
-
-        safe_name = "library_content"
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
     if file_format == "docx":
-
         return {
-            "data": generate_docx(
-                content
-            ),
-            "name": (
-                f"{safe_name}_"
-                f"{timestamp}.docx"
-            ),
-            "mime": (
-                "application/vnd.openxmlformats-officedocument."
-                "wordprocessingml.document"
-            ),
+            "data": generate_docx(content),
+            "name": f"{safe_name}_{timestamp}.docx",
+            "mime": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
             "content": content,
         }
 
     if file_format == "pdf":
-
         return {
-            "data": generate_pdf(
-                content
-            ),
-            "name": (
-                f"{safe_name}_"
-                f"{timestamp}.pdf"
-            ),
+            "data": generate_pdf(content),
+            "name": f"{safe_name}_{timestamp}.pdf",
             "mime": "application/pdf",
             "content": content,
         }
 
     if file_format == "pptx":
+        presentation = generate_presentation_structure(
+            user_request,
+            content,
+            attachment_context,
+        )
 
-        presentation = (
-            generate_presentation_structure(
-                user_request,
-                content,
-                attachment_context,
-            )
+        presentation_title = presentation.get(
+            "title",
+            title,
         )
 
         return {
             "data": generate_pptx(
-                presentation.get(
-                    "title",
-                    "Library Presentation",
-                ),
-                presentation.get(
-                    "slides",
-                    [],
-                ),
+                presentation_title,
+                presentation.get("slides", []),
             ),
-            "name": (
-                f"{safe_name}_"
-                f"{timestamp}.pptx"
-            ),
-            "mime": (
-                "application/vnd.openxmlformats-officedocument."
-                "presentationml.presentation"
-            ),
+            "name": f"{safe_name}_{timestamp}.pptx",
+            "mime": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
             "content": content,
         }
 
     if file_format == "xlsx":
-
         return {
-            "data": generate_xlsx(
-                content
-            ),
-            "name": (
-                f"{safe_name}_"
-                f"{timestamp}.xlsx"
-            ),
-            "mime": (
-                "application/vnd.openxmlformats-officedocument."
-                "spreadsheetml.sheet"
-            ),
+            "data": generate_xlsx(content),
+            "name": f"{safe_name}_{timestamp}.xlsx",
+            "mime": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             "content": content,
         }
 
     if file_format == "csv":
-
         return {
-            "data": generate_csv(
-                content
-            ),
-            "name": (
-                f"{safe_name}_"
-                f"{timestamp}.csv"
-            ),
+            "data": generate_csv(content),
+            "name": f"{safe_name}_{timestamp}.csv",
             "mime": "text/csv",
             "content": content,
         }
 
     if file_format == "txt":
-
         return {
-            "data": generate_txt(
-                content
-            ),
-            "name": (
-                f"{safe_name}_"
-                f"{timestamp}.txt"
-            ),
+            "data": generate_txt(content),
+            "name": f"{safe_name}_{timestamp}.txt",
             "mime": "text/plain",
             "content": content,
         }
 
     if file_format == "md":
-
         return {
-            "data": generate_markdown(
-                content
-            ),
-            "name": (
-                f"{safe_name}_"
-                f"{timestamp}.md"
-            ),
+            "data": generate_markdown(content),
+            "name": f"{safe_name}_{timestamp}.md",
             "mime": "text/markdown",
             "content": content,
         }
 
     return None
-
 
 
 # COPY BUTTON
