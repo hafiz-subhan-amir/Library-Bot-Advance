@@ -3265,14 +3265,13 @@ if st.session_state.generated_image:
     )
 
     st.download_button(
-    label=f"⬇️ Download {generated_file['name']}",
-    data=generated_file["data"],
-    file_name=generated_file["name"],
-    mime=generated_file["mime"],
-    use_container_width=True,
-    key="generated_file_download",
-)
-
+        label="⬇️ Download Image",
+        data=image_buffer.getvalue(),
+        file_name="generated_image.png",
+        mime="image/png",
+        use_container_width=True,
+        key="generated_image_download",
+    )
 
 # GENERATED FILE
 
