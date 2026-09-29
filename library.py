@@ -3522,267 +3522,267 @@ if chat_input:
 
    
     # DETECT INTENT
-intent = detect_intent(user_request)
+    intent = detect_intent(user_request)
 
     
-    # FILE GENERATION
+        # FILE GENERATION
     
 
-if intent == "FILE_GENERATION":
+    if intent == "FILE_GENERATION":
 
-        with st.spinner(
-            "Preparing your downloadable file..."
-        ):
+            with st.spinner(
+                "Preparing your downloadable file..."
+            ):
 
-            try:
+                try:
 
-                generated = (
-                    generate_downloadable_file(
-                        user_request,
-                        attachment_context,
-                    )
-                )
-
-                if generated:
-
-                    st.session_state.generated_file = (
-                        generated
+                    generated = (
+                        generate_downloadable_file(
+                            user_request,
+                            attachment_context,
+                        )
                     )
 
-                    st.session_state.generated_image = (
-                        None
-                    )
+                    if generated:
+
+                        st.session_state.generated_file = (
+                            generated
+                        )
+
+                        st.session_state.generated_image = (
+                            None
+                        )
+
+                        assistant_message = (
+                            "I prepared the requested "
+                            f"**{generated['name'].split('.')[-1].upper()} "
+                            "file**.\n\n"
+                            "You can download it below."
+                        )
+
+                    else:
+
+                        assistant_message = (
+                            "I couldn't determine the "
+                            "requested file format."
+                        )
+
+                except Exception as e:
 
                     assistant_message = (
-                        "I prepared the requested "
-                        f"**{generated['name'].split('.')[-1].upper()} "
-                        "file**.\n\n"
-                        "You can download it below."
+                        "File generation failed:\n\n"
+                        f"{type(e).__name__}: "
+                        f"{str(e)}"
                     )
 
-                else:
-
-                    assistant_message = (
-                        "I couldn't determine the "
-                        "requested file format."
-                    )
-
-            except Exception as e:
-
-                assistant_message = (
-                    "File generation failed:\n\n"
-                    f"{type(e).__name__}: "
-                    f"{str(e)}"
-                )
-
-        add_message(
-            "assistant",
-            assistant_message,
-        )
-
-        st.rerun()
-
-
-    
-    # IMAGE GENERATION
-    
-
-elif intent == "IMAGE_GENERATION":
-
-        with st.spinner(
-            "Generating your image..."
-        ):
-
-            image, error = generate_image(
-                user_request
+            add_message(
+                "assistant",
+                assistant_message,
             )
 
-        if image:
+            st.rerun()
 
-            st.session_state.generated_image = (
-                image
+
+    
+        # IMAGE GENERATION
+    
+
+    elif intent == "IMAGE_GENERATION":
+
+            with st.spinner(
+                "Generating your image..."
+            ):
+
+                image, error = generate_image(
+                    user_request
+                )
+
+            if image:
+
+                st.session_state.generated_image = (
+                    image
+                )
+
+                st.session_state.generated_file = (
+                    None
+                )
+
+                assistant_message = (
+                    "I've generated the image "
+                    "based on your request."
+                )
+
+            else:
+
+                assistant_message = (
+                    "I couldn't generate the image.\n\n"
+                    f"**Error:** {error}"
+                )
+
+            add_message(
+                "assistant",
+                assistant_message,
+            )
+
+            st.rerun()
+
+
+    
+        # IMAGE UPLOAD / VISION
+    
+
+    elif uploaded_images:
+
+            vision_answers = []
+
+            for image_data in uploaded_images:
+
+                filename = image_data[
+                    "name"
+                ]
+
+                marker = (
+                    f"IMAGE: {filename}"
+                )
+
+                vision_result = ""
+
+                if marker in attachment_context:
+
+                    parts = (
+                        attachment_context.split(
+                            marker,
+                            1,
+                        )
+                    )
+
+                    if len(parts) > 1:
+
+                        vision_result = (
+                            parts[1].strip()
+                        )
+
+                if not vision_result:
+
+                    vision_result = (
+                        "The image was uploaded "
+                        "successfully, but no visual "
+                        "analysis was returned."
+                    )
+
+                vision_answers.append(
+                    f"### 🖼️ {filename}\n\n"
+                    f"{vision_result}"
+                )
+
+            assistant_message = (
+                "\n\n".join(
+                    vision_answers
+                )
+            )
+
+            add_message(
+                "assistant",
+                assistant_message,
             )
 
             st.session_state.generated_file = (
                 None
             )
 
-            assistant_message = (
-                "I've generated the image "
-                "based on your request."
+            st.session_state.generated_image = (
+                None
             )
 
-        else:
-
-            assistant_message = (
-                "I couldn't generate the image.\n\n"
-                f"**Error:** {error}"
-            )
-
-        add_message(
-            "assistant",
-            assistant_message,
-        )
-
-        st.rerun()
+            st.rerun()
 
 
     
-    # IMAGE UPLOAD / VISION
+        # CATALOG SEARCH
     
 
-elif uploaded_images:
+    elif intent == "CATALOG_SEARCH":
 
-        vision_answers = []
-
-        for image_data in uploaded_images:
-
-            filename = image_data[
-                "name"
-            ]
-
-            marker = (
-                f"IMAGE: {filename}"
+            catalog_result = search_catalog(
+                user_request
             )
 
-            vision_result = ""
+            if catalog_result is not None:
 
-            if marker in attachment_context:
+                if catalog_result.empty:
 
-                parts = (
-                    attachment_context.split(
-                        marker,
-                        1,
-                    )
-                )
-
-                if len(parts) > 1:
-
-                    vision_result = (
-                        parts[1].strip()
+                    assistant_message = (
+                        "I couldn't find a matching "
+                        "record in the available catalog."
                     )
 
-            if not vision_result:
+                else:
 
-                vision_result = (
-                    "The image was uploaded "
-                    "successfully, but no visual "
-                    "analysis was returned."
-                )
-
-            vision_answers.append(
-                f"### 🖼️ {filename}\n\n"
-                f"{vision_result}"
-            )
-
-        assistant_message = (
-            "\n\n".join(
-                vision_answers
-            )
-        )
-
-        add_message(
-            "assistant",
-            assistant_message,
-        )
-
-        st.session_state.generated_file = (
-            None
-        )
-
-        st.session_state.generated_image = (
-            None
-        )
-
-        st.rerun()
-
-
-    
-    # CATALOG SEARCH
-    
-
-elif intent == "CATALOG_SEARCH":
-
-        catalog_result = search_catalog(
-            user_request
-        )
-
-        if catalog_result is not None:
-
-            if catalog_result.empty:
-
-                assistant_message = (
-                    "I couldn't find a matching "
-                    "record in the available catalog."
-                )
+                    assistant_message = (
+                        "### Catalog Results\n\n"
+                        + catalog_result.to_markdown(
+                            index=False
+                        )
+                    )
 
             else:
 
                 assistant_message = (
-                    "### Catalog Results\n\n"
-                    + catalog_result.to_markdown(
-                        index=False
+                    answer_library_question(
+                        user_request,
+                        intent,
+                        attachment_context,
                     )
                 )
 
-        else:
-
-            assistant_message = (
-                answer_library_question(
-                    user_request,
-                    intent,
-                    attachment_context,
-                )
+            add_message(
+                "assistant",
+                assistant_message,
             )
 
-        add_message(
-            "assistant",
-            assistant_message,
-        )
+            st.session_state.generated_file = (
+                None
+            )
 
-        st.session_state.generated_file = (
-            None
-        )
+            st.session_state.generated_image = (
+                None
+            )
 
-        st.session_state.generated_image = (
-            None
-        )
-
-        st.rerun()
+            st.rerun()
 
 
     
-    # NORMAL QUESTION
+        # NORMAL QUESTION
     
 
-else:
+    else:
 
-        with st.spinner(
-            "Thinking..."
-        ):
+            with st.spinner(
+                "Thinking..."
+            ):
 
-            assistant_message = (
-                answer_library_question(
-                    user_request,
-                    intent,
-                    attachment_context,
+                assistant_message = (
+                    answer_library_question(
+                        user_request,
+                        intent,
+                        attachment_context,
+                    )
                 )
+
+            add_message(
+                "assistant",
+                assistant_message,
             )
 
-        add_message(
-            "assistant",
-            assistant_message,
-        )
+            st.session_state.generated_file = (
+                None
+            )
 
-        st.session_state.generated_file = (
-            None
-        )
+            st.session_state.generated_image = (
+                None
+            )
 
-        st.session_state.generated_image = (
-            None
-        )
-
-        st.rerun()
+            st.rerun()
 
 
 
