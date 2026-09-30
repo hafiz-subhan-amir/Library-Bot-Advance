@@ -1296,7 +1296,7 @@ Maintain conversation context.
 
 def get_history():
 
-    recent = chat_messages()[-12:]
+    recent = chat_messages()[-4:]
 
     history_parts = []
 
